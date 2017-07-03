@@ -146,12 +146,17 @@ int main(void)
                     key_pressed_a     = false,
                     key_pressed_d     = false,
                     key_pressed_space = false,
-                    player_died       = false;
+                    player_died       = false,
+                    skip_remain_time  = false; /*on low framerates, skip remaining delta time*/
     #if TESTING
     bool            printed_coords    = false;
     #endif
-    Uint32          current_timer     = 0,
-                    old_timer         = 0;
+    Uint32          current_timer     = 0,         /*updated at the start of every loop*/
+                    ten_second_timer  = 0,         /*updated every 10000 milliseconds*/
+                    prev_timer        = 0;         /*current_timer - prev_timer = frame_time*/
+    float           frame_time        = 0.f,       /*time since last loop*/
+                    min_time          = 0.f;       /*min(frame_time, target_time)*/
+    const float     target_time       = 100.f/6.f; /*ideal frame time (16.7ms)*/
     int             forloop_i         = 0,
                     forloop_j         = 0,
                     forloop_k         = 0;
@@ -297,7 +302,11 @@ int main(void)
         fprintf(stderr, "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n",
                 SDL_GetError());
         SDL_ClearError();
-        SDL_GL_SetSwapInterval(1);
+        if(SDL_GL_SetSwapInterval(1))
+        {
+            fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.", SDL_GetError());
+            SDL_ClearError();
+        }
     }
 
     /*fetch GL extension functions*/
@@ -338,14 +347,22 @@ int main(void)
             printf("Asteroid %d not spawned\n", forloop_i);
     }
     #endif
+    /*get time in milliseconds*/
+    prev_timer = SDL_GetTicks();
 
     /*** main loop ***/
     while(!loop_exit)
     {
+        /*get last frame time in milliseconds*/
         current_timer = SDL_GetTicks();
-        if(current_timer - old_timer > 10000) /*every 10 seconds*/
+        frame_time = (float)(current_timer - prev_timer);
+        if(frame_time > 250.f) /*yikes*/
+           frame_time = 250.f;
+        prev_timer = current_timer;
+
+        if(current_timer - ten_second_timer > 10000) /*every 10 seconds*/
         {
-            old_timer = current_timer;
+            ten_second_timer = current_timer;
             /*spawn new asteroid*/
             for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
             {
@@ -364,316 +381,340 @@ int main(void)
                 }
             }
             #if TESTING
+            printf("Frame time = %.1f ms\n", frame_time);
             printed_coords = false;
             #endif
         }
         /*** physics ***/
-        if(!player_died)
+        while(frame_time > 0.f)
         {
-            /*player*/
-            if(key_pressed_w)
+            /*update min_time in increments of target_time*/
+            if(frame_time > target_time)        /*low framerate*/
             {
-                player_vel[0] += 0.0005f*sin(player_rot*M_PI/180.f);
-                player_vel[1] += 0.0005f*cos(player_rot*M_PI/180.f);
+               min_time = target_time;
+               skip_remain_time = true;
             }
-            if(key_pressed_s)
+            else if(skip_remain_time)           /*discard remaining time?*/
             {
-                player_vel[0] -= 0.0005f*sin(player_rot*M_PI/180.f);
-                player_vel[1] -= 0.0005f*cos(player_rot*M_PI/180.f);
+               skip_remain_time = false;
+               if(frame_time > target_time/2.f) /*remaining time still usable*/
+                   min_time = frame_time;       /*might stutter at low framerates*/
+               else                             /*remaining time too low*/
+               {
+                   frame_time = -1.f;
+                   min_time = 0.f;
+               }
             }
-            if(player_vel[0] > 0.02f) /*clamp velocity*/
-               player_vel[0] = 0.02f;
-            if(player_vel[0] < -0.02f)
-               player_vel[0] = -0.02f;
-            if(player_vel[1] > 0.02f)
-               player_vel[1] = 0.02f;
-            if(player_vel[1] < -0.02f)
-               player_vel[1] = -0.02f;
-            player_pos[0] += player_vel[0];
-            player_pos[1] += player_vel[1];
-            if(key_pressed_d)
-               player_rot += 5.f;
-            if(key_pressed_a)
-               player_rot -= 5.f;
-            if(player_pos[0] > 1.f) /*screen wrap*/
-               player_pos[0] = -0.99f;
-            if(player_pos[0] < -1.f)
-               player_pos[0] = 0.99f;
-            if(player_pos[1] > 1.f)
-               player_pos[1] = -0.99f;
-            if(player_pos[1] < -1.f)
-               player_pos[1] = 0.99f;
-            if(player_rot > 360.f) /*clamp rotation*/
-               player_rot = 0.f;
-            if(player_rot < 0.f)
-               player_rot = 360.f;
-            /*projectile*/
-            if(key_pressed_space && projectile_pos[1] < 0.3f)
+            else                                /*high framerate*/
+               min_time = frame_time;
+
+            if(!player_died)
             {
-                projectile_pos[1] += 0.02f; /*position for drawing*/
-                projectile_real_pos[0] += 0.02f*sin(player_rot*M_PI/180.f); /*for physics*/
-                projectile_real_pos[1] += 0.02f*cos(player_rot*M_PI/180.f);
-            }
-            else /*reset projectile position*/
-            {
-                projectile_pos[1] = 0.04f;
-                projectile_real_pos[0] = 0.04f*sin(player_rot*M_PI/180.f);
-                projectile_real_pos[1] = 0.04f*cos(player_rot*M_PI/180.f);
-            }
-            /*asteroids*/
-            for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
-            {
-                if(aster[forloop_i].is_spawned)
+                /*player*/
+                if(key_pressed_w)
                 {
-                    aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f);
-                    aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
-                    if(aster[forloop_i].pos[0] > 1.f) /*screen wrap*/
-                       aster[forloop_i].pos[0] = -0.99f;
-                    if(aster[forloop_i].pos[0] < -1.f)
-                       aster[forloop_i].pos[0] = 0.99f;
-                    if(aster[forloop_i].pos[1] > 1.f)
-                       aster[forloop_i].pos[1] = -0.99f;
-                    if(aster[forloop_i].pos[1] < -1.f)
-                       aster[forloop_i].pos[1] = 0.99f;
-                    aster[forloop_i].rot += aster[forloop_i].rot_speed;
-                    if(aster[forloop_i].rot > 360.f) /*clamp rotation*/
-                       aster[forloop_i].rot = 0.f;
-                    if(aster[forloop_i].rot < 0.f)
-                       aster[forloop_i].rot = 360.f;
+                    player_vel[0] += 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                    player_vel[1] += 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
                 }
-            }
-
-            /*player bounding triangle*/
-            temp_point1[0] = 0.f;
-            temp_point1[1] = 0.04f;
-            get_real_point_pos(temp_point1,
-                               temp_point2,
-                               player_pos,
-                               1.f,
-                               player_rot);
-            /*point A*/
-            player_bounds[0] = temp_point2[0];
-            player_bounds[1] = temp_point2[1];
-
-            temp_point1[0] = 0.04f;
-            temp_point1[1] = -0.04f;
-            get_real_point_pos(temp_point1,
-                               temp_point2,
-                               player_pos,
-                               1.f,
-                               player_rot);
-            /*point B*/
-            player_bounds[2] = temp_point2[0];
-            player_bounds[3] = temp_point2[1];
-
-            temp_point1[0] = -0.04f;
-            temp_point1[1] = -0.04f;
-            get_real_point_pos(temp_point1,
-                               temp_point2,
-                               player_pos,
-                               1.f,
-                               player_rot);
-            /*point C*/
-            player_bounds[4] = temp_point2[0];
-            player_bounds[5] = temp_point2[1];
-
-            #if TESTING
-            if(!printed_coords)
-            {
-                printf("Player bounds: (%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)\nAsteroid bounds: ",
-                        player_bounds[0], player_bounds[1], player_bounds[2],
-                        player_bounds[3], player_bounds[4], player_bounds[5]);
-            }
-            #endif
-            /*cycle through each asteroid 'k'*/
-            for(forloop_k = 0; forloop_k < ASTER_MAX_COUNT; forloop_k++)
-            {
-                if(aster[forloop_k].is_spawned)
+                if(key_pressed_s)
                 {
-                    /*asteroid bounding triangles*/
-                    for(forloop_i = 0; forloop_i < 6; forloop_i++)
+                    player_vel[0] -= 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                    player_vel[1] -= 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                }
+                if(player_vel[0] > 0.02f *(min_time/target_time) && min_time > 0.0001f) /*clamp velocity*/
+                   player_vel[0] = 0.02f *(min_time/target_time);
+                if(player_vel[0] < -0.02f*(min_time/target_time) && min_time > 0.0001f)
+                   player_vel[0] = -0.02f*(min_time/target_time);
+                if(player_vel[1] > 0.02f *(min_time/target_time) && min_time > 0.0001f)
+                   player_vel[1] = 0.02f *(min_time/target_time);
+                if(player_vel[1] < -0.02f*(min_time/target_time) && min_time > 0.0001f)
+                   player_vel[1] = -0.02f*(min_time/target_time);
+                player_pos[0] += player_vel[0];
+                player_pos[1] += player_vel[1];
+                if(key_pressed_d)
+                   player_rot += 5.f * (min_time/target_time);
+                if(key_pressed_a)
+                   player_rot -= 5.f * (min_time/target_time);
+                if(player_pos[0] > 1.f) /*screen wrap*/
+                   player_pos[0] = -0.99f;
+                if(player_pos[0] < -1.f)
+                   player_pos[0] = 0.99f;
+                if(player_pos[1] > 1.f)
+                   player_pos[1] = -0.99f;
+                if(player_pos[1] < -1.f)
+                   player_pos[1] = 0.99f;
+                if(player_rot > 360.f) /*clamp rotation*/
+                   player_rot = 0.f;
+                if(player_rot < 0.f)
+                   player_rot = 360.f;
+                /*projectile*/
+                if(key_pressed_space && projectile_pos[1] < 0.3f)
+                {
+                    projectile_pos[1]      += 0.02f * (min_time/target_time); /*position for drawing*/
+                    projectile_real_pos[0] += 0.02f * sin(player_rot*M_PI/180.f) * (min_time/target_time); /*for physics*/
+                    projectile_real_pos[1] += 0.02f * cos(player_rot*M_PI/180.f) * (min_time/target_time);
+                }
+                else /*reset projectile position*/
+                {
+                    projectile_pos[1]      = 0.04f;
+                    projectile_real_pos[0] = 0.04f * sin(player_rot*M_PI/180.f);
+                    projectile_real_pos[1] = 0.04f * cos(player_rot*M_PI/180.f);
+                }
+                /*asteroids*/
+                for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
+                {
+                    if(aster[forloop_i].is_spawned)
                     {
-                        for(forloop_j = 0; forloop_j < 6; forloop_j+=2)
+                        aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f) * (min_time/target_time);
+                        aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f) * (min_time/target_time);
+                        if(aster[forloop_i].pos[0] > 1.f) /*screen wrap*/
+                           aster[forloop_i].pos[0] = -0.99f;
+                        if(aster[forloop_i].pos[0] < -1.f)
+                           aster[forloop_i].pos[0] = 0.99f;
+                        if(aster[forloop_i].pos[1] > 1.f)
+                           aster[forloop_i].pos[1] = -0.99f;
+                        if(aster[forloop_i].pos[1] < -1.f)
+                           aster[forloop_i].pos[1] = 0.99f;
+                        aster[forloop_i].rot += aster[forloop_i].rot_speed * (min_time/target_time);
+                        if(aster[forloop_i].rot > 360.f) /*clamp rotation*/
+                           aster[forloop_i].rot = 0.f;
+                        if(aster[forloop_i].rot < 0.f)
+                           aster[forloop_i].rot = 360.f;
+                    }
+                }
+
+                /*player bounding triangle*/
+                temp_point1[0] = 0.f;
+                temp_point1[1] = 0.04f;
+                get_real_point_pos(temp_point1,
+                                   temp_point2,
+                                   player_pos,
+                                   1.f,
+                                   player_rot);
+                /*point A*/
+                player_bounds[0] = temp_point2[0];
+                player_bounds[1] = temp_point2[1];
+
+                temp_point1[0] = 0.04f;
+                temp_point1[1] = -0.04f;
+                get_real_point_pos(temp_point1,
+                                   temp_point2,
+                                   player_pos,
+                                   1.f,
+                                   player_rot);
+                /*point B*/
+                player_bounds[2] = temp_point2[0];
+                player_bounds[3] = temp_point2[1];
+
+                temp_point1[0] = -0.04f;
+                temp_point1[1] = -0.04f;
+                get_real_point_pos(temp_point1,
+                                   temp_point2,
+                                   player_pos,
+                                   1.f,
+                                   player_rot);
+                /*point C*/
+                player_bounds[4] = temp_point2[0];
+                player_bounds[5] = temp_point2[1];
+
+                #if TESTING
+                if(!printed_coords)
+                {
+                    printf("Player bounds: (%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)\nAsteroid bounds: ",
+                            player_bounds[0], player_bounds[1], player_bounds[2],
+                            player_bounds[3], player_bounds[4], player_bounds[5]);
+                }
+                #endif
+                /*cycle through each asteroid 'k'*/
+                for(forloop_k = 0; forloop_k < ASTER_MAX_COUNT; forloop_k++)
+                {
+                    if(aster[forloop_k].is_spawned)
+                    {
+                        /*asteroid bounding triangles*/
+                        for(forloop_i = 0; forloop_i < 6; forloop_i++)
                         {
-                            temp_point1[0] = aster_bounds[forloop_i][forloop_j];
-                            temp_point1[1] = aster_bounds[forloop_i][forloop_j+1];
+                            for(forloop_j = 0; forloop_j < 6; forloop_j+=2)
+                            {
+                                temp_point1[0] = aster_bounds[forloop_i][forloop_j];
+                                temp_point1[1] = aster_bounds[forloop_i][forloop_j+1];
+                                get_real_point_pos(temp_point1,
+                                                   temp_point2,
+                                                   aster[forloop_k].pos,
+                                                   aster[forloop_k].scale,
+                                                   aster[forloop_k].rot);
+                                /*actual position*/
+                                aster[forloop_k].bounds_real[forloop_i][forloop_j]   = temp_point2[0];
+                                aster[forloop_k].bounds_real[forloop_i][forloop_j+1] = temp_point2[1];
+                                #if TESTING
+                                if(!printed_coords)
+                                {
+                                    printf(" (%.2f,%.2f)",
+                                        aster[forloop_k].bounds_real[forloop_i][forloop_j],
+                                        aster[forloop_k].bounds_real[forloop_i][forloop_j+1]);
+                                }
+                                #endif
+                            }
+                            #if TESTING
+                            if(!printed_coords)
+                                printf("\n                 ");
+                            #endif
+                        }
+                        #if TESTING
+                        if(!printed_coords)
+                            printf("\n");
+                        #endif
+                        /*check asteroid point to player triangle collision*/
+                        for(forloop_i = (object_element_count[0] + object_element_count[2]);
+                            forloop_i < (object_element_count[0] + object_element_count[2] + object_element_count[4]);
+                            forloop_i+=2)
+                        {
+                            temp_point1[0] = object_verts[forloop_i];
+                            temp_point1[1] = object_verts[forloop_i+1];
                             get_real_point_pos(temp_point1,
                                                temp_point2,
                                                aster[forloop_k].pos,
                                                aster[forloop_k].scale,
                                                aster[forloop_k].rot);
-                            /*actual position*/
-                            aster[forloop_k].bounds_real[forloop_i][forloop_j]   = temp_point2[0];
-                            aster[forloop_k].bounds_real[forloop_i][forloop_j+1] = temp_point2[1];
-                            #if TESTING
-                            if(!printed_coords)
-                            {
-                                printf(" (%.2f,%.2f)",
-                                    aster[forloop_k].bounds_real[forloop_i][forloop_j],
-                                    aster[forloop_k].bounds_real[forloop_i][forloop_j+1]);
-                            }
-                            #endif
-                        }
-                        #if TESTING
-                        if(!printed_coords)
-                            printf("\n                 ");
-                        #endif
-                    }
-                    #if TESTING
-                    if(!printed_coords)
-                        printf("\n");
-                    #endif
-                    /*check asteroid point to player triangle collision*/
-                    for(forloop_i = (object_element_count[0] + object_element_count[2]);
-                        forloop_i < (object_element_count[0] + object_element_count[2] + object_element_count[4]);
-                        forloop_i+=2)
-                    {
-                        temp_point1[0] = object_verts[forloop_i];
-                        temp_point1[1] = object_verts[forloop_i+1];
-                        get_real_point_pos(temp_point1,
-                                           temp_point2,
-                                           aster[forloop_k].pos,
-                                           aster[forloop_k].scale,
-                                           aster[forloop_k].rot);
-                        /*detect damage*/
-                        if(detect_point_in_triangle(temp_point2[0],
-                                                    temp_point2[1],
-                                                    player_bounds))
-                        {
-                            #if TESTING
-                            printf("Collision detected at asteroid point %d (%.2f,%.2f) against player triangle\n",
-                                forloop_i/2, temp_point2[0], temp_point2[1]);
-                            #endif
-                            player_died = true;
-                        }
-                    }
-                    /*check player point to asteroid triangle collision*/
-                    for(forloop_i = 0; forloop_i < 6; forloop_i+=2)
-                    {
-                        for(forloop_j = 0; forloop_j < 6; forloop_j++)
-                        {
                             /*detect damage*/
-                            if(detect_point_in_triangle(
-                                    player_bounds[forloop_i],
-                                    player_bounds[forloop_i+1],
-                                    aster[forloop_k].bounds_real[forloop_j]))
+                            if(detect_point_in_triangle(temp_point2[0],
+                                                        temp_point2[1],
+                                                        player_bounds))
                             {
                                 #if TESTING
-                                printf("Collision detected at player point %d (%.2f,%.2f) against asteroid triangle %d\n",
-                                        forloop_i/2,player_bounds[forloop_i], player_bounds[forloop_i+1], forloop_j);
+                                printf("Collision detected at asteroid point %d (%.2f,%.2f) against player triangle\n",
+                                        forloop_i/2, temp_point2[0], temp_point2[1]);
                                 #endif
                                 player_died = true;
                             }
                         }
-                    }
-                    /*check projectile collision*/
-                    if(key_pressed_space)
-                    {
-                        get_real_point_pos(projectile_real_pos,
-                                           temp_point1,
-                                           player_pos,
-                                           1.f,
-                                           0.f);
-
-                        for(forloop_i = 0; forloop_i < 6; forloop_i++)
+                        /*check player point to asteroid triangle collision*/
+                        for(forloop_i = 0; forloop_i < 6; forloop_i+=2)
                         {
-                            /* Hit! */
-                            if(detect_point_in_triangle(temp_point1[0],
-                                                        temp_point1[1],
-                                                        aster[forloop_k].bounds_real[forloop_i]))
+                            for(forloop_j = 0; forloop_j < 6; forloop_j++)
                             {
-                                #if TESTING
-                                printf("Hit detected on asteroid triangle %d at point (%.2f,%.2f)\n",
-                                    forloop_i, temp_point1[0], temp_point1[1]);
-                                #endif
-                                /*reset projectile position*/
-                                projectile_pos[1] = 0.04f;
-                                projectile_real_pos[0] = 0.04f*sin(player_rot*M_PI/180.f);
-                                projectile_real_pos[1] = 0.04f*cos(player_rot*M_PI/180.f);
-                                /*score*/
-                                if(aster[forloop_k].scale > 4.f)      /*ASTER_LARGE = 10 points*/
-                                   score += 10;
-                                else if(aster[forloop_k].scale < 2.f) /*ASTER_SMALL = 1 points*/
-                                   score += 1;
-                                else                                  /*ASTER_MED = 5 points*/
-                                   score += 5;
-                                /*update scoreboard/window title*/
-                                sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
-                                SDL_SetWindowTitle(win_main,win_title);
-                                /*decide whether to spawn little asteroid*/
-                                if(aster[forloop_k].scale < 2.f)     /*SMALL -> DESPAWN*/
-                                   aster[forloop_k].is_spawned = 0;
-                                else
+                                /*detect damage*/
+                                if(detect_point_in_triangle(
+                                            player_bounds[forloop_i],
+                                            player_bounds[forloop_i+1],
+                                            aster[forloop_k].bounds_real[forloop_j]))
                                 {
-                                    if(aster[forloop_k].scale < 4.f) /*MED -> SMALL*/
-                                       aster[forloop_k].scale = ASTER_SMALL;
-                                    else                             /*LARGE -> MED*/
-                                       aster[forloop_k].scale = ASTER_MED;
-                                    aster[forloop_k].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
-                                    aster[forloop_k].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
-                                    aster[forloop_k].angle     = (float)(rand()%360);
-                                    aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
-                                    /*chance to spawn additional asteroid*/
-                                    for(forloop_j = 0; forloop_j < ASTER_MAX_COUNT; forloop_j++)
+                                    #if TESTING
+                                    printf("Collision detected at player point %d (%.2f,%.2f) against asteroid triangle %d\n",
+                                            forloop_i/2,player_bounds[forloop_i], player_bounds[forloop_i+1], forloop_j);
+                                    #endif
+                                    player_died = true;
+                                }
+                            }
+                        }
+                        /*check projectile collision*/
+                        if(key_pressed_space)
+                        {
+                            get_real_point_pos(projectile_real_pos,
+                                               temp_point1,
+                                               player_pos,
+                                               1.f,
+                                               0.f);
+    
+                            for(forloop_i = 0; forloop_i < 6; forloop_i++)
+                            {
+                                /* Hit! */
+                                if(detect_point_in_triangle(temp_point1[0],
+                                                            temp_point1[1],
+                                                            aster[forloop_k].bounds_real[forloop_i]))
+                                {
+                                    #if TESTING
+                                    printf("Hit detected on asteroid triangle %d at point (%.2f,%.2f)\n",
+                                            forloop_i, temp_point1[0], temp_point1[1]);
+                                    #endif
+                                    /*reset projectile position*/
+                                    projectile_pos[1] = 0.04f;
+                                    projectile_real_pos[0] = 0.04f*sin(player_rot*M_PI/180.f);
+                                    projectile_real_pos[1] = 0.04f*cos(player_rot*M_PI/180.f);
+                                    /*score*/
+                                    if(aster[forloop_k].scale > 4.f)      /*ASTER_LARGE = 10 points*/
+                                       score += 10;
+                                    else if(aster[forloop_k].scale < 2.f) /*ASTER_SMALL = 1 points*/
+                                       score += 1;
+                                    else                                  /*ASTER_MED = 5 points*/
+                                       score += 5;
+                                    /*update scoreboard/window title*/
+                                    sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
+                                    SDL_SetWindowTitle(win_main,win_title);
+                                    /*decide whether to spawn little asteroid*/
+                                    if(aster[forloop_k].scale < 2.f)     /*SMALL -> DESPAWN*/
+                                       aster[forloop_k].is_spawned = 0;
+                                    else
                                     {
-                                        if(!aster[forloop_j].is_spawned)
+                                        if(aster[forloop_k].scale  < 4.f) /*MED -> SMALL*/
+                                           aster[forloop_k].scale  = ASTER_SMALL;
+                                        else                             /*LARGE -> MED*/
+                                           aster[forloop_k].scale  = ASTER_MED;
+                                        aster[forloop_k].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
+                                        aster[forloop_k].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
+                                        aster[forloop_k].angle     = (float)(rand()%360);
+                                        aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
+                                        /*chance to spawn additional asteroid*/
+                                        for(forloop_j = 0; forloop_j < ASTER_MAX_COUNT; forloop_j++)
                                         {
-                                            if(rand() & 0x01) /*50% chance*/
+                                            if(!aster[forloop_j].is_spawned)
                                             {
-                                                aster[forloop_j].is_spawned= 1;
-                                                aster[forloop_j].scale     = aster[forloop_k].scale;
-                                                aster[forloop_j].pos[0]    = aster[forloop_k].pos[0];
-                                                aster[forloop_j].pos[1]    = aster[forloop_k].pos[1];
-                                                aster[forloop_j].rot       = aster[forloop_k].rot;
-                                                aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
-                                                aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
-                                                aster[forloop_j].angle     = (float)(rand()%360);
-                                                aster[forloop_j].rot_speed = ((float)(rand()%600)-300.f)/100.f;
+                                                if(rand() & 0x01) /*50% chance*/
+                                                {
+                                                    aster[forloop_j].is_spawned= 1;
+                                                    aster[forloop_j].scale     = aster[forloop_k].scale;
+                                                    aster[forloop_j].pos[0]    = aster[forloop_k].pos[0];
+                                                    aster[forloop_j].pos[1]    = aster[forloop_k].pos[1];
+                                                    aster[forloop_j].rot       = aster[forloop_k].rot;
+                                                    aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
+                                                    aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
+                                                    aster[forloop_j].angle     = (float)(rand()%360);
+                                                    aster[forloop_j].rot_speed = ((float)(rand()%600)-300.f)/100.f;
+                                                }
+                                                break;
                                             }
-                                            break;
                                         }
                                     }
                                 }
                             }
-                        }
-                    } /* check projectile collision */
-                } /* if(asteroid k is spawned) */
+                        } /* check projectile collision */
+                    } /* if(asteroid k is spawned) */
+                    #if TESTING
+                    else
+                    {
+                        if(!printed_coords)
+                            printf("Asteroid %d not spawned.\n\n", forloop_k);
+                    }
+                    #endif
+                } /* for(forloop_k) boundary checking */
                 #if TESTING
-                else
-                {
-                    if(!printed_coords)
-                        printf("Asteroid %d not spawned.\n\n", forloop_k);
-                }
+                if(!printed_coords)
+                    printed_coords = true;
                 #endif
-            } /* for(forloop_k) boundary checking */
-            #if TESTING
-            if(!printed_coords)
-                printed_coords = true;
-            #endif
-        } /* if(!player_died) */
-
-        if(player_died)
-        {
-            blast_scale += 0.2f;      /*make blast effect grow*/
-            if(blast_scale > 6.f)     /*large enough*/
+            } /* if(!player_died) */
+            if(player_died)
             {
-                blast_scale = 1.f;    /*reset blast*/
-                if(score > top_score) /*new high score!*/
-                   top_score = score;
-                score = 0;
-                /*update scoreboard/window title*/
-                sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d",
-                        score, top_score);
-                SDL_SetWindowTitle(win_main,win_title);
-                /*reset player*/
-                player_died   = false;
-                player_pos[0] = 0.f;
-                player_pos[1] = 0.f;
-                player_rot    = 0.f;
-                player_vel[0] = 0.f;
-                player_vel[1] = 0.f;
+                blast_scale += 0.2f * (min_time/target_time); /*make blast effect grow*/
+                if(blast_scale > 6.f)                         /*large enough*/
+                {
+                    blast_scale = 1.f;                        /*reset blast*/
+                    if(score > top_score)                     /*new high score!*/
+                       top_score = score;
+                    score = 0;
+                    /*update scoreboard/window title*/
+                    sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d",
+                            score, top_score);
+                    SDL_SetWindowTitle(win_main,win_title);
+                    /*reset player*/
+                    player_died   = false;
+                    player_pos[0] = 0.f;
+                    player_pos[1] = 0.f;
+                    player_rot    = 0.f;
+                    player_vel[0] = 0.f;
+                    player_vel[1] = 0.f;
+                }
             }
-        }
+            frame_time -= min_time; /*decrement remaining time*/
+        } /*while(frame_time > 0.f)*/
 
         /*** event polling ***/
         while(SDL_PollEvent(&event_main))
