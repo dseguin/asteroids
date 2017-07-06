@@ -38,6 +38,10 @@
 #include <math.h>
 #include <time.h>
 
+#define ASTEROIDS_VER_MAJOR 1
+#define ASTEROIDS_VER_MINOR 0
+#define ASTEROIDS_VER_PATCH 1
+
 #ifndef M_PI
   #ifdef M_PIl
     #define M_PI        M_PIl
@@ -52,7 +56,6 @@
 #define ASTER_LARGE     5.f
 #define ASTER_MED       3.f
 #define ASTER_SMALL     1.f
-#define ASTER_MAX_COUNT 8      /*maximum number of asteroids at one time*/
 #define TESTING         0      /*print extra debug information*/
 
 /*** GL extension function pointers ***
@@ -100,6 +103,10 @@ typedef struct asteroid {
 /*** prototypes ***/
 /* Print info about SDL */
 void print_sdl_version      (void);
+/* Print help text */
+void print_usage            (void);
+/* Print local version info */
+void print_version          (void);
 
 /* Detect if a point is in a triangle.
  *
@@ -137,7 +144,8 @@ void get_real_point_pos     (const float* original_vector,
                              const float  scale,
                              const float  rot);
 
-int main(void)
+int main                    (int          argc,
+                             char**       argv)
 {
     /*** variables ***/
     bool            loop_exit         = false, /*exit the main window loop?*/
@@ -159,7 +167,10 @@ int main(void)
     const float     target_time       = 100.f/6.f; /*ideal frame time (16.7ms)*/
     int             forloop_i         = 0,
                     forloop_j         = 0,
-                    forloop_k         = 0;
+                    forloop_k         = 0,
+                    vsync             = 1,
+                    a_count           = 8,         /*input asteroid max count*/
+                    aster_max_count   = 8;         /*actual asteroid max count*/
     unsigned int    score             = 0,
                     top_score         = 0;
     char            win_title[128]    = {'\0'};
@@ -219,10 +230,68 @@ int main(void)
     GLfloat         projectile_pos[]       = {0.f,0.f}; /*[x,y]*/
     GLfloat         projectile_real_pos[]  = {0.f,0.f}; /*[x,y]*/
     GLfloat         blast_scale            = 1.f;
-    asteroid        aster[ASTER_MAX_COUNT]; /*reserve memory for ASTER_MAX_COUNT asteroids*/
+    asteroid*       aster; /*reserve memory for aster_max_count asteroids*/
+
+    /*parse args*/
+    for(forloop_i = 1; forloop_i < argc; forloop_i++)
+    {
+        if(argv[forloop_i][0] == '-')
+        {
+            switch(argv[forloop_i][1])
+            {
+                /*-h help text*/
+                case 'h' : print_usage();
+                           return 0;
+                /*-v version text*/
+                case 'v' : print_version();
+                           return 0;
+                /*-s vsync option*/
+                case 's' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -s requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           if(!strcmp(argv[forloop_i+1], "on"))
+                               vsync = 1;
+                           else if(!strcmp(argv[forloop_i+1], "off"))
+                               vsync = 0;
+                           else if(!strcmp(argv[forloop_i+1], "lateswap"))
+                               vsync = -1;
+                           else
+                           {
+                               fprintf(stderr, "Invalid Vsync parameter '%s'\n", argv[forloop_i+1]);
+                               print_usage();
+                               return 1;
+                           }
+                           break;
+                /*-n max asteroid count*/
+                case 'n' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -n requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           a_count = atoi(argv[forloop_i+1]);
+                           if(a_count > 0 && a_count < 256)
+                               aster_max_count = a_count;
+                           else
+                           {
+                               fprintf(stderr, "Number of asteroids must be an integer between 0 and 256\n");
+                               print_usage();
+                               return 1;
+                           }
+                           break;
+                default  : fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
+                           print_usage();
+                           return 1;
+            }
+        }
+    }
 
     /*initialize asteroids*/
-    for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
+    aster = (struct asteroid*) malloc(sizeof(struct asteroid)*aster_max_count);
+    for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
     {
         aster[forloop_i].is_spawned = 0;
         aster[forloop_i].scale      = ASTER_LARGE;
@@ -297,14 +366,26 @@ int main(void)
        glGetString(GL_VENDOR),
        glGetString(GL_RENDERER));
     /*set late swap tearing, or VSync if not*/
-    if(SDL_GL_SetSwapInterval(-1))
+    if(SDL_GL_SetSwapInterval(vsync))
     {
-        fprintf(stderr, "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n",
-                SDL_GetError());
-        SDL_ClearError();
-        if(SDL_GL_SetSwapInterval(1))
+        if(vsync == -1)
+        {
+            fprintf(stderr, "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n", SDL_GetError());
+            SDL_ClearError();
+            if(SDL_GL_SetSwapInterval(1))
+            {
+                fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.", SDL_GetError());
+                SDL_ClearError();
+            }
+        }
+        else if(vsync == 1)
         {
             fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.", SDL_GetError());
+            SDL_ClearError();
+        }
+        else
+        {
+            fprintf(stderr, "SDL Set Swap Interval: %s\nUnknown vsync option '%d'", SDL_GetError(), vsync);
             SDL_ClearError();
         }
     }
@@ -329,7 +410,7 @@ int main(void)
 
     /*set RNG and spawn 3 asteroids*/
     srand((unsigned)time(NULL));
-    for(forloop_i=0; forloop_i < 3; forloop_i++)
+    for(forloop_i=0; forloop_i < 3 && forloop_i < aster_max_count; forloop_i++)
     {
         aster[forloop_i].is_spawned= 1;
         aster[forloop_i].pos[1]    = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
@@ -339,7 +420,7 @@ int main(void)
         aster[forloop_i].rot_speed = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
     }
     #if TESTING
-    for(forloop_i=0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
+    for(forloop_i=0; forloop_i < aster_max_count; forloop_i++)
     {
         if(aster[forloop_i].is_spawned)
             printf("Asteroid %d spawned\n", forloop_i);
@@ -364,7 +445,7 @@ int main(void)
         {
             ten_second_timer = current_timer;
             /*spawn new asteroid*/
-            for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
+            for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
             {
                 if(!aster[forloop_i].is_spawned)
                 {
@@ -461,7 +542,7 @@ int main(void)
                     projectile_real_pos[1] = 0.04f * cos(player_rot*M_PI/180.f);
                 }
                 /*asteroids*/
-                for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
+                for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
                 {
                     if(aster[forloop_i].is_spawned)
                     {
@@ -526,7 +607,7 @@ int main(void)
                 }
                 #endif
                 /*cycle through each asteroid 'k'*/
-                for(forloop_k = 0; forloop_k < ASTER_MAX_COUNT; forloop_k++)
+                for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
                 {
                     if(aster[forloop_k].is_spawned)
                     {
@@ -654,7 +735,7 @@ int main(void)
                                         aster[forloop_k].angle     = (float)(rand()%360);
                                         aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
                                         /*chance to spawn additional asteroid*/
-                                        for(forloop_j = 0; forloop_j < ASTER_MAX_COUNT; forloop_j++)
+                                        for(forloop_j = 0; forloop_j < aster_max_count; forloop_j++)
                                         {
                                             if(!aster[forloop_j].is_spawned)
                                             {
@@ -765,7 +846,7 @@ int main(void)
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         /*asteroids*/
-        for(forloop_i = 0; forloop_i < ASTER_MAX_COUNT; forloop_i++)
+        for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
         {
             if(aster[forloop_i].is_spawned)
             {
@@ -839,6 +920,28 @@ void print_sdl_version(void)
             \nSDL version (current): %d.%d.%d-%s\n",
             ver_comp.major, ver_comp.minor, ver_comp.patch, SDL_REVISION,
             ver_link.major, ver_link.minor, ver_link.patch, SDL_GetRevision());
+}
+
+void print_usage(void)
+{
+    printf("\nUsage: asteroids [-h|-v] [-s on|off|lateswap] [-n COUNT]\n\n");
+    printf("        -h        Print this help text and exit.\n");
+    printf("        -v        Print version info and exit.\n");
+    printf("        -s VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
+    printf("                  or lateswap. The default is on.\n");
+    printf("        -n COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
+    printf("                  between 0 and 256. The default max count is 8.\n\n");
+}
+
+void print_version(void)
+{
+    SDL_version ver_comp;
+    SDL_VERSION(&ver_comp);
+
+    printf("\nSimple Asteroids - version %d.%d.%d\n", ASTEROIDS_VER_MAJOR, ASTEROIDS_VER_MINOR, ASTEROIDS_VER_PATCH);
+    printf("Copyright (c) 2017 David Seguin <davidseguin@live.ca>\n");
+    printf("Homepage: <https://github.com/dseguin/asteroids>\n");
+    printf("Compiled against SDL version %d.%d.%d-%s\n\n", ver_comp.major, ver_comp.minor, ver_comp.patch, SDL_REVISION);
 }
 
 int detect_point_in_triangle(const float  px,

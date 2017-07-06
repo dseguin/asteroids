@@ -1,0 +1,13 @@
+2017-07-06 - Version 1.0.1 ***
+
+* Made physics independent of framerate
+* Added support for arbitrary number of asteroids
+* Added command line argument parsing
+* Added usage and version info
+* User can change maximum asteroid count with '-n' switch
+* User can change Vsync/swap interval with '-s' switch
+
+2017-07-02 - Version 1.0.0 ***
+
+* Initial release
+
