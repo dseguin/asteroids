@@ -5,7 +5,7 @@
  * Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.5
  *
  * https://github.com/dseguin/asteroids
- * Copyright 2017 (c) David Seguin <davidseguin@live.ca>
+ * Copyright (c) 2017 David Seguin <davidseguin@live.ca>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
  * a copy of this software and associated documentation files (the
@@ -39,8 +39,8 @@
 #include <time.h>
 
 #define ASTEROIDS_VER_MAJOR 1
-#define ASTEROIDS_VER_MINOR 0
-#define ASTEROIDS_VER_PATCH 1
+#define ASTEROIDS_VER_MINOR 1
+#define ASTEROIDS_VER_PATCH 0
 
 #ifndef M_PI
   #ifdef M_PIl
@@ -59,7 +59,6 @@
 #define MASS_LARGE      5.f
 #define MASS_MED        3.f
 #define MASS_SMALL      1.f
-#define TESTING         0      /*print extra debug information*/
 
 /*** GL extension function pointers ***
  *
@@ -165,17 +164,15 @@ int main                    (int          argc,
                              char**       argv)
 {
     /*** variables ***/
-    bool            loop_exit         = false, /*exit the main window loop?*/
+    bool            loop_exit         = false,     /*exit the main window loop?*/
                     key_pressed_w     = false,
                     key_pressed_s     = false,
                     key_pressed_a     = false,
                     key_pressed_d     = false,
                     key_pressed_space = false,
                     player_died       = false,
-                    skip_remain_time  = false; /*on low framerates, skip remaining delta time*/
-    #if TESTING
-    bool            printed_coords    = false;
-    #endif
+                    skip_remain_time  = false,     /*on low framerates, skip remaining delta time*/
+                    physics_enabled   = false;     /*enable asteroid collision physics*/
     Uint32          current_timer     = 0,         /*updated at the start of every loop*/
                     ten_second_timer  = 0,         /*updated every 10000 milliseconds*/
                     prev_timer        = 0;         /*current_timer - prev_timer = frame_time*/
@@ -298,6 +295,8 @@ int main                    (int          argc,
                                print_usage();
                                return 1;
                            }
+                           break;
+                case 'p' : physics_enabled = true;
                            break;
                 default  : fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
                            print_usage();
@@ -441,15 +440,7 @@ int main                    (int          argc,
         aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
         aster[forloop_i].rot_speed  = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
     }
-    #if TESTING
-    for(forloop_i=0; forloop_i < aster_max_count; forloop_i++)
-    {
-        if(aster[forloop_i].is_spawned)
-            printf("Asteroid %d spawned\n", forloop_i);
-        else
-            printf("Asteroid %d not spawned\n", forloop_i);
-    }
-    #endif
+
     /*get time in milliseconds*/
     prev_timer = SDL_GetTicks();
 
@@ -487,10 +478,6 @@ int main                    (int          argc,
                     break;
                 }
             }
-            #if TESTING
-            printf("Frame time = %.1f ms\n", frame_time);
-            printed_coords = false;
-            #endif
         }
         /*** physics ***/
         while(frame_time > 0.f)
@@ -624,14 +611,6 @@ int main                    (int          argc,
                 player_bounds[4] = temp_point2[0];
                 player_bounds[5] = temp_point2[1];
 
-                #if TESTING
-                if(!printed_coords)
-                {
-                    printf("Player bounds: (%.2f,%.2f) (%.2f,%.2f) (%.2f,%.2f)\nAsteroid bounds: ",
-                            player_bounds[0], player_bounds[1], player_bounds[2],
-                            player_bounds[3], player_bounds[4], player_bounds[5]);
-                }
-                #endif
                 /*cycle through each asteroid 'k'*/
                 for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
                 {
@@ -652,24 +631,8 @@ int main                    (int          argc,
                                 /*actual position*/
                                 aster[forloop_k].bounds_real[forloop_i][forloop_j]   = temp_point2[0];
                                 aster[forloop_k].bounds_real[forloop_i][forloop_j+1] = temp_point2[1];
-                                #if TESTING
-                                if(!printed_coords)
-                                {
-                                    printf(" (%.2f,%.2f)",
-                                        aster[forloop_k].bounds_real[forloop_i][forloop_j],
-                                        aster[forloop_k].bounds_real[forloop_i][forloop_j+1]);
-                                }
-                                #endif
                             }
-                            #if TESTING
-                            if(!printed_coords)
-                                printf("\n                 ");
-                            #endif
                         }
-                        #if TESTING
-                        if(!printed_coords)
-                            printf("\n");
-                        #endif
                         /*check asteroid point to player triangle collision*/
                         for(forloop_i = (object_element_count[0] + object_element_count[2]);
                             forloop_i < (object_element_count[0] + object_element_count[2] + object_element_count[4]);
@@ -686,13 +649,7 @@ int main                    (int          argc,
                             if(detect_point_in_triangle(temp_point2[0],
                                                         temp_point2[1],
                                                         player_bounds))
-                            {
-                                #if TESTING
-                                printf("Collision detected at asteroid point %d (%.2f,%.2f) against player triangle\n",
-                                        forloop_i/2, temp_point2[0], temp_point2[1]);
-                                #endif
                                 player_died = true;
-                            }
                         }
                         /*check player point to asteroid triangle collision*/
                         for(forloop_i = 0; forloop_i < 6; forloop_i+=2)
@@ -704,13 +661,7 @@ int main                    (int          argc,
                                             player_bounds[forloop_i],
                                             player_bounds[forloop_i+1],
                                             aster[forloop_k].bounds_real[forloop_j]))
-                                {
-                                    #if TESTING
-                                    printf("Collision detected at player point %d (%.2f,%.2f) against asteroid triangle %d\n",
-                                            forloop_i/2,player_bounds[forloop_i], player_bounds[forloop_i+1], forloop_j);
-                                    #endif
                                     player_died = true;
-                                }
                             }
                         }
                         /*check projectile collision*/
@@ -729,10 +680,6 @@ int main                    (int          argc,
                                                             temp_point1[1],
                                                             aster[forloop_k].bounds_real[forloop_i]))
                                 {
-                                    #if TESTING
-                                    printf("Hit detected on asteroid triangle %d at point (%.2f,%.2f)\n",
-                                            forloop_i, temp_point1[0], temp_point1[1]);
-                                    #endif
                                     /*reset projectile position*/
                                     projectile_pos[1] = 0.04f;
                                     projectile_real_pos[0] = 0.04f*sin(player_rot*M_PI/180.f);
@@ -798,81 +745,73 @@ int main                    (int          argc,
                             }
                         } /* check projectile collision */
                     } /* if(asteroid k is spawned) */
-                    #if TESTING
-                    else
-                    {
-                        if(!printed_coords)
-                            printf("Asteroid %d not spawned.\n\n", forloop_k);
-                    }
-                    #endif
                 } /* for(forloop_k) boundary checking */
-                #if TESTING
-                if(!printed_coords)
-                    printed_coords = true;
-                #endif
-                /*check asteroid-asteroid collision*/
-                for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
+                if(physics_enabled)
                 {
-                    if(aster[forloop_k].is_spawned)
+                    /*check asteroid-asteroid collision*/
+                    for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
                     {
-                        for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+                        if(aster[forloop_k].is_spawned)
                         {
-                            /*check asteroid against every other asteroid*/
-                            if(aster[forloop_i].is_spawned && forloop_i != forloop_k)
+                            for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
                             {
-                                /*collision*/
-                                if(detect_aster_collision(aster[forloop_k].bounds_real,
-                                                          aster[forloop_i].bounds_real))
+                                /*check asteroid against every other asteroid*/
+                                if(aster[forloop_i].is_spawned && forloop_i != forloop_k)
                                 {
-                                    if(aster[forloop_k].collided != forloop_i) /*only do collision once*/
+                                    /*collision*/
+                                    if(detect_aster_collision(aster[forloop_k].bounds_real,
+                                                              aster[forloop_i].bounds_real))
                                     {
-                                        GLfloat velk[2];
-                                        GLfloat veli[2];
-                                        /*'k' collides with 'i', and vice versa*/
-                                        aster[forloop_k].collided = forloop_i;
-                                        aster[forloop_i].collided = forloop_k;
+                                        if(aster[forloop_k].collided != forloop_i) /*only do collision once*/
+                                        {
+                                            GLfloat velk[2];
+                                            GLfloat veli[2];
+                                            /*'k' collides with 'i', and vice versa*/
+                                            aster[forloop_k].collided = forloop_i;
+                                            aster[forloop_i].collided = forloop_k;
 
-                                        velk[0] = aster[forloop_k].vel[0];
-                                        velk[1] = aster[forloop_k].vel[1];
-                                        veli[0] = aster[forloop_i].vel[0];
-                                        veli[1] = aster[forloop_i].vel[1];
+                                            velk[0] = aster[forloop_k].vel[0];
+                                            velk[1] = aster[forloop_k].vel[1];
+                                            veli[0] = aster[forloop_i].vel[0];
+                                            veli[1] = aster[forloop_i].vel[1];
 
-                                        /*calculate resulting velocities*/
-                                        /*v1x = (m1-m2)*u1x/(m1+m2) + 2*m2*u2x/(m1+m2)*/
-                                        aster[forloop_k].vel[0] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[0]) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                   (aster[forloop_i].mass * veli[0] * 2) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+                                            /*calculate resulting velocities*/
+                                            /*v1x = (m1-m2)*u1x/(m1+m2) + 2*m2*u2x/(m1+m2)*/
+                                            aster[forloop_k].vel[0] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[0]) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                       (aster[forloop_i].mass * veli[0] * 2) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
 
-                                        /*v1y = (m1-m2)*u1y/(m1+m2) + 2*m2*u2y/(m1+m2)*/
-                                        aster[forloop_k].vel[1] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[1]) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                   (aster[forloop_i].mass * veli[1] * 2) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+                                            /*v1y = (m1-m2)*u1y/(m1+m2) + 2*m2*u2y/(m1+m2)*/
+                                            aster[forloop_k].vel[1] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[1]) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                       (aster[forloop_i].mass * veli[1] * 2) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
 
-                                        /*v2x = (m2-m1)*u2x/(m1+m2) + 2*m1*u1x/(m1+m2)*/
-                                        aster[forloop_i].vel[0] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[0]) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                   (aster[forloop_k].mass * velk[0] * 2) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+                                            /*v2x = (m2-m1)*u2x/(m1+m2) + 2*m1*u1x/(m1+m2)*/
+                                            aster[forloop_i].vel[0] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[0]) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                       (aster[forloop_k].mass * velk[0] * 2) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
 
-                                        /*v2 = (m2-m1)*u2/(m1+m2) + 2*m1*u1/(m1+m2)*/
-                                        aster[forloop_i].vel[1] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[1]) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                   (aster[forloop_k].mass * velk[1] * 2) /
-                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+                                            /*v2 = (m2-m1)*u2/(m1+m2) + 2*m1*u1/(m1+m2)*/
+                                            aster[forloop_i].vel[1] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[1]) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                       (aster[forloop_k].mass * velk[1] * 2) /
+                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
+                                        }
                                     }
-                                }
-                                else if(aster[forloop_k].collided == forloop_i)
-                                {
-                                    /*'k' and 'i' are no longer colliding*/
-                                    aster[forloop_k].collided = -1;
-                                    aster[forloop_i].collided = -1;
+                                    else if(aster[forloop_k].collided == forloop_i)
+                                    {
+                                        /*'k' and 'i' are no longer colliding*/
+                                        aster[forloop_k].collided = -1;
+                                        aster[forloop_i].collided = -1;
+                                    }
                                 }
                             }
                         }
-                    }
-                } /* asteroid-asteroid collision */
+                    } /* asteroid-asteroid collision */
+                } /* if(physics_enabled) */
             } /* if(!player_died) */
             if(player_died)
             {
@@ -1026,13 +965,14 @@ void print_sdl_version(void)
 
 void print_usage(void)
 {
-    printf("\nUsage: asteroids [-h|-v] [-s on|off|lateswap] [-n COUNT]\n\n");
+    printf("\nUsage: asteroids [-h|-v] [-p] [-s on|off|lateswap] [-n COUNT]\n\n");
     printf("        -h        Print this help text and exit.\n");
-    printf("        -v        Print version info and exit.\n");
+    printf("        -n COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
+    printf("                  between 0 and 256. The default max count is 8.\n");
+    printf("        -p        Enables asteroid collision physics.\n");
     printf("        -s VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
     printf("                  or lateswap. The default is on.\n");
-    printf("        -n COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
-    printf("                  between 0 and 256. The default max count is 8.\n\n");
+    printf("        -v        Print version info and exit.\n\n");
 }
 
 void print_version(void)

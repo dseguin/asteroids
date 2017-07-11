@@ -1,3 +1,8 @@
+2017-07-11 - Version 1.1.0 ***
+
+* Added asteroid collision physics with other asteroids
+* User can enable asteroid collisions with '-p' switch
+
 2017-07-06 - Version 1.0.1 ***
 
 * Made physics independent of framerate

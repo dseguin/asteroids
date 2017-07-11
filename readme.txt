@@ -3,7 +3,7 @@ Simple Asteroids
 ================
   Version 1
   https://github.com/dseguin/asteroids
-  Copyright 2017 (c) David Seguin <davidseguin@live.ca>
+  Copyright (c) 2017 David Seguin <davidseguin@live.ca>
   MIT License (see asteroids.c for license text)
 
 Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.5
@@ -12,6 +12,9 @@ Controls:
   w,a,s,d - Move around
   space   - Shoot
   escape  - Quit
+
+Run the program with '-h' for command line options.
+
 
 Dependencies
 ------------
