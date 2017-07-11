@@ -56,6 +56,9 @@
 #define ASTER_LARGE     5.f
 #define ASTER_MED       3.f
 #define ASTER_SMALL     1.f
+#define MASS_LARGE      5.f
+#define MASS_MED        3.f
+#define MASS_SMALL      1.f
 #define TESTING         0      /*print extra debug information*/
 
 /*** GL extension function pointers ***
@@ -91,6 +94,8 @@ typedef unsigned char bool;
  **/
 typedef struct asteroid {
     int         is_spawned;        /*if we check physics and drawing*/
+    int         collided;          /*ID of colliding asteroid*/
+    GLfloat     mass;              /*can be MASS_LARGE, MASS_MED, or MASS_SMALL*/
     GLfloat     scale;             /*can be ASTER_LARGE, ASTER_MED, or ASTER_SMALL*/
     GLfloat     pos[2];            /*position (x,y)*/
     GLfloat     vel[2];            /*velocity (x,y)*/
@@ -143,6 +148,18 @@ void get_real_point_pos     (const float* original_vector,
                              const float* trans,
                              const float  scale,
                              const float  rot);
+
+/* Detect if two asteroids have collided.
+ *
+ *     aster_a - bounding triangles, 6x6 float matrix
+ *     aster_b - bounding triangles, 6x6 float matrix
+ *
+ * Checks each point of asteroid A with each bounding triangle
+ * of asteroid B. Returns true if the asteroids intersect, false
+ * if otherwise.
+ **/
+bool detect_aster_collision (float aster_a[6][6],
+                             float aster_b[6][6]);
 
 int main                    (int          argc,
                              char**       argv)
@@ -294,6 +311,8 @@ int main                    (int          argc,
     for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
     {
         aster[forloop_i].is_spawned = 0;
+        aster[forloop_i].collided   = -1;
+        aster[forloop_i].mass       = MASS_LARGE;
         aster[forloop_i].scale      = ASTER_LARGE;
         aster[forloop_i].pos[0]     = 1.f;
         aster[forloop_i].pos[1]     = 1.f;
@@ -412,12 +431,15 @@ int main                    (int          argc,
     srand((unsigned)time(NULL));
     for(forloop_i=0; forloop_i < 3 && forloop_i < aster_max_count; forloop_i++)
     {
-        aster[forloop_i].is_spawned= 1;
-        aster[forloop_i].pos[1]    = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
-        aster[forloop_i].vel[0]    = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
-        aster[forloop_i].vel[1]    = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
-        aster[forloop_i].angle     = (float)(rand()%360);               /*direction between 0 and 360 degrees*/
-        aster[forloop_i].rot_speed = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
+        aster[forloop_i].is_spawned = 1;
+        aster[forloop_i].collided   = -1;
+        aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
+        aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
+        aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
+        aster[forloop_i].angle      = (float)(rand()%360);               /*direction between 0 and 360 degrees*/
+        aster[forloop_i].vel[0]     = aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f);
+        aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
+        aster[forloop_i].rot_speed  = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
     }
     #if TESTING
     for(forloop_i=0; forloop_i < aster_max_count; forloop_i++)
@@ -450,13 +472,17 @@ int main                    (int          argc,
                 if(!aster[forloop_i].is_spawned)
                 {
                     aster[forloop_i].is_spawned = 1;
+                    aster[forloop_i].collided   = -1;
                     aster[forloop_i].pos[0]     = 1.f;
                     aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f;
                     aster[forloop_i].scale      = ASTER_LARGE;
+                    aster[forloop_i].mass       = MASS_LARGE;
                     aster[forloop_i].rot        = 0.f;
                     aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;
                     aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;
                     aster[forloop_i].angle      = (float)(rand()%360);
+                    aster[forloop_i].vel[0]     = aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f);
+                    aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
                     aster[forloop_i].rot_speed  = ((float)(rand()%400)-200.f)/100.f;
                     break;
                 }
@@ -479,11 +505,11 @@ int main                    (int          argc,
             {
                skip_remain_time = false;
                if(frame_time > target_time/2.f) /*remaining time still usable*/
-                   min_time = frame_time;       /*might stutter at low framerates*/
+                  min_time = frame_time;        /*might stutter at low framerates*/
                else                             /*remaining time too low*/
                {
-                   frame_time = -1.f;
-                   min_time = 0.f;
+                  frame_time = -1.f;
+                  min_time = 0.f;
                }
             }
             else                                /*high framerate*/
@@ -494,13 +520,13 @@ int main                    (int          argc,
                 /*player*/
                 if(key_pressed_w)
                 {
-                    player_vel[0] += 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
-                    player_vel[1] += 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                   player_vel[0] += 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                   player_vel[1] += 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
                 }
                 if(key_pressed_s)
                 {
-                    player_vel[0] -= 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
-                    player_vel[1] -= 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                   player_vel[0] -= 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
+                   player_vel[1] -= 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
                 }
                 if(player_vel[0] > 0.02f *(min_time/target_time) && min_time > 0.0001f) /*clamp velocity*/
                    player_vel[0] = 0.02f *(min_time/target_time);
@@ -546,8 +572,8 @@ int main                    (int          argc,
                 {
                     if(aster[forloop_i].is_spawned)
                     {
-                        aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f) * (min_time/target_time);
-                        aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f) * (min_time/target_time);
+                        aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * (min_time/target_time);
+                        aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * (min_time/target_time);
                         if(aster[forloop_i].pos[0] > 1.f) /*screen wrap*/
                            aster[forloop_i].pos[0] = -0.99f;
                         if(aster[forloop_i].pos[0] < -1.f)
@@ -727,12 +753,21 @@ int main                    (int          argc,
                                     else
                                     {
                                         if(aster[forloop_k].scale  < 4.f) /*MED -> SMALL*/
+                                        {
                                            aster[forloop_k].scale  = ASTER_SMALL;
+                                           aster[forloop_k].mass   = MASS_SMALL;
+                                        }
                                         else                             /*LARGE -> MED*/
+                                        {
                                            aster[forloop_k].scale  = ASTER_MED;
+                                           aster[forloop_k].mass   = MASS_MED;
+                                        }
+                                        aster[forloop_k].collided  = -1;
                                         aster[forloop_k].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
                                         aster[forloop_k].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
                                         aster[forloop_k].angle     = (float)(rand()%360);
+                                        aster[forloop_k].vel[0]    = aster[forloop_k].vel[0] * sin(aster[forloop_k].angle*M_PI/180.f);
+                                        aster[forloop_k].vel[1]    = aster[forloop_k].vel[1] * cos(aster[forloop_k].angle*M_PI/180.f);
                                         aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
                                         /*chance to spawn additional asteroid*/
                                         for(forloop_j = 0; forloop_j < aster_max_count; forloop_j++)
@@ -742,13 +777,17 @@ int main                    (int          argc,
                                                 if(rand() & 0x01) /*50% chance*/
                                                 {
                                                     aster[forloop_j].is_spawned= 1;
+                                                    aster[forloop_j].collided  = -1;
                                                     aster[forloop_j].scale     = aster[forloop_k].scale;
-                                                    aster[forloop_j].pos[0]    = aster[forloop_k].pos[0];
-                                                    aster[forloop_j].pos[1]    = aster[forloop_k].pos[1];
+                                                    aster[forloop_j].mass      = aster[forloop_k].mass;
                                                     aster[forloop_j].rot       = aster[forloop_k].rot;
                                                     aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
                                                     aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
                                                     aster[forloop_j].angle     = (float)(rand()%360);
+                                                    aster[forloop_j].vel[0]    = aster[forloop_j].vel[0] * sin(aster[forloop_j].angle*M_PI/180.f);
+                                                    aster[forloop_j].vel[1]    = aster[forloop_j].vel[1] * cos(aster[forloop_j].angle*M_PI/180.f);
+                                                    aster[forloop_j].pos[0]    = aster[forloop_k].pos[0];
+                                                    aster[forloop_j].pos[1]    = aster[forloop_k].pos[1];
                                                     aster[forloop_j].rot_speed = ((float)(rand()%600)-300.f)/100.f;
                                                 }
                                                 break;
@@ -771,6 +810,69 @@ int main                    (int          argc,
                 if(!printed_coords)
                     printed_coords = true;
                 #endif
+                /*check asteroid-asteroid collision*/
+                for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
+                {
+                    if(aster[forloop_k].is_spawned)
+                    {
+                        for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+                        {
+                            /*check asteroid against every other asteroid*/
+                            if(aster[forloop_i].is_spawned && forloop_i != forloop_k)
+                            {
+                                /*collision*/
+                                if(detect_aster_collision(aster[forloop_k].bounds_real,
+                                                          aster[forloop_i].bounds_real))
+                                {
+                                    if(aster[forloop_k].collided != forloop_i) /*only do collision once*/
+                                    {
+                                        GLfloat velk[2];
+                                        GLfloat veli[2];
+                                        /*'k' collides with 'i', and vice versa*/
+                                        aster[forloop_k].collided = forloop_i;
+                                        aster[forloop_i].collided = forloop_k;
+
+                                        velk[0] = aster[forloop_k].vel[0];
+                                        velk[1] = aster[forloop_k].vel[1];
+                                        veli[0] = aster[forloop_i].vel[0];
+                                        veli[1] = aster[forloop_i].vel[1];
+
+                                        /*calculate resulting velocities*/
+                                        /*v1x = (m1-m2)*u1x/(m1+m2) + 2*m2*u2x/(m1+m2)*/
+                                        aster[forloop_k].vel[0] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[0]) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                   (aster[forloop_i].mass * veli[0] * 2) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+
+                                        /*v1y = (m1-m2)*u1y/(m1+m2) + 2*m2*u2y/(m1+m2)*/
+                                        aster[forloop_k].vel[1] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[1]) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                   (aster[forloop_i].mass * veli[1] * 2) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+
+                                        /*v2x = (m2-m1)*u2x/(m1+m2) + 2*m1*u1x/(m1+m2)*/
+                                        aster[forloop_i].vel[0] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[0]) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                   (aster[forloop_k].mass * velk[0] * 2) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+
+                                        /*v2 = (m2-m1)*u2/(m1+m2) + 2*m1*u1/(m1+m2)*/
+                                        aster[forloop_i].vel[1] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[1]) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                                                   (aster[forloop_k].mass * velk[1] * 2) /
+                                                                   (aster[forloop_k].mass + aster[forloop_i].mass);
+                                    }
+                                }
+                                else if(aster[forloop_k].collided == forloop_i)
+                                {
+                                    /*'k' and 'i' are no longer colliding*/
+                                    aster[forloop_k].collided = -1;
+                                    aster[forloop_i].collided = -1;
+                                }
+                            }
+                        }
+                    }
+                } /* asteroid-asteroid collision */
             } /* if(!player_died) */
             if(player_died)
             {
@@ -996,3 +1098,37 @@ void get_real_point_pos(const float* original_vector,
                    original_vector[1] * cos(rot*M_PI/180.f)) * scale + trans[1];
 }
 
+bool detect_aster_collision(float aster_a[6][6],
+                            float aster_b[6][6])
+{
+    int i = 0;
+
+    for(i = 0; i < 6; i++)
+    {
+        /*point A*/
+        if(detect_point_in_triangle(aster_a[0][0], aster_a[0][1], aster_b[i]))
+            return true;
+        /*point B*/
+        if(detect_point_in_triangle(aster_a[0][2], aster_a[0][3], aster_b[i]))
+            return true;
+        /*point C*/
+        if(detect_point_in_triangle(aster_a[0][4], aster_a[0][5], aster_b[i]))
+            return true;
+        /*point D*/
+        if(detect_point_in_triangle(aster_a[1][2], aster_a[1][3], aster_b[i]))
+            return true;
+        /*point E*/
+        if(detect_point_in_triangle(aster_a[1][4], aster_a[1][5], aster_b[i]))
+            return true;
+        /*point F*/
+        if(detect_point_in_triangle(aster_a[2][2], aster_a[2][3], aster_b[i]))
+            return true;
+        /*point G*/
+        if(detect_point_in_triangle(aster_a[4][4], aster_a[4][5], aster_b[i]))
+            return true;
+        /*point H*/
+        if(detect_point_in_triangle(aster_a[5][4], aster_a[5][5], aster_b[i]))
+            return true;
+    }
+    return false;
+}
