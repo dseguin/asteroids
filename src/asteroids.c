@@ -28,9 +28,18 @@
  *
  *****************************************************************************/
 
-#include <GL/gl.h>
-#include <SDL2/SDL.h>
-#include <SDL2/SDL_revision.h>
+#ifdef _WIN32
+  #include <Windows.h>
+  #include <gl/GL.h>
+  #include <SDL.h>
+  #include <SDL_opengl_glext.h>
+  #include <SDL_revision.h>
+  #pragma comment(lib, "opengl32.lib")
+#else
+  #include <GL/gl.h>
+  #include <SDL2/SDL.h>
+  #include <SDL2/SDL_revision.h>
+#endif
 
 #include <stdio.h>
 #include <stdlib.h>
