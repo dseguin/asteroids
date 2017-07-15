@@ -48,7 +48,7 @@
 #include <time.h>
 
 #define ASTEROIDS_VER_MAJOR 1
-#define ASTEROIDS_VER_MINOR 1
+#define ASTEROIDS_VER_MINOR 2
 #define ASTEROIDS_VER_PATCH 0
 
 #ifndef M_PI
@@ -193,7 +193,8 @@ int main                    (int          argc,
                     forloop_k         = 0,
                     vsync             = 1,
                     a_count           = 8,         /*input asteroid max count*/
-                    aster_max_count   = 8;         /*actual asteroid max count*/
+                    aster_max_count   = 8,         /*actual asteroid max count*/
+                    aster_init_count  = 3;         /*initial spawn count*/
     unsigned int    score             = 0,
                     top_score         = 0;
     char            win_title[128]    = {'\0'};
@@ -305,7 +306,25 @@ int main                    (int          argc,
                                return 1;
                            }
                            break;
+                /*-p enable asteroid collision physics*/
                 case 'p' : physics_enabled = true;
+                           break;
+                /*-i initial asteroid count*/
+                case 'i' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -i requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           a_count = atoi(argv[forloop_i+1]);
+                           if(a_count > 0 && a_count < 16)
+                               aster_init_count = a_count;
+                           else
+                           {
+                               fprintf(stderr, "Number of asteroids must be an integer between 0 and 16\n");
+                               print_usage();
+                               return 1;
+                           }
                            break;
                 default  : fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
                            print_usage();
@@ -401,18 +420,18 @@ int main                    (int          argc,
             SDL_ClearError();
             if(SDL_GL_SetSwapInterval(1))
             {
-                fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.", SDL_GetError());
+                fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.\n", SDL_GetError());
                 SDL_ClearError();
             }
         }
         else if(vsync == 1)
         {
-            fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.", SDL_GetError());
+            fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.\n", SDL_GetError());
             SDL_ClearError();
         }
         else
         {
-            fprintf(stderr, "SDL Set Swap Interval: %s\nUnknown vsync option '%d'", SDL_GetError(), vsync);
+            fprintf(stderr, "SDL Set Swap Interval: %s\nUnknown vsync option '%d'\n", SDL_GetError(), vsync);
             SDL_ClearError();
         }
     }
@@ -437,10 +456,25 @@ int main                    (int          argc,
 
     /*set RNG and spawn 3 asteroids*/
     srand((unsigned)time(NULL));
-    for(forloop_i=0; forloop_i < 3 && forloop_i < aster_max_count; forloop_i++)
+    for(forloop_i=0; forloop_i < aster_init_count && forloop_i < aster_max_count; forloop_i++)
     {
         aster[forloop_i].is_spawned = 1;
         aster[forloop_i].collided   = -1;
+        if(rand() & 0x01)      /*50%*/
+        {
+            aster[forloop_i].mass   = MASS_SMALL;
+            aster[forloop_i].scale  = ASTER_SMALL;
+        }
+        else if(rand() & 0x01) /*25%*/
+        {
+            aster[forloop_i].mass   = MASS_MED;
+            aster[forloop_i].scale  = ASTER_MED;
+        }
+        else                   /*25%*/
+        {
+            aster[forloop_i].mass   = MASS_LARGE;
+            aster[forloop_i].scale  = ASTER_LARGE;
+        }
         aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
         aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
         aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
@@ -475,8 +509,16 @@ int main                    (int          argc,
                     aster[forloop_i].collided   = -1;
                     aster[forloop_i].pos[0]     = 1.f;
                     aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f;
-                    aster[forloop_i].scale      = ASTER_LARGE;
-                    aster[forloop_i].mass       = MASS_LARGE;
+                    if(rand() & 0x01) /*50%*/
+                    {
+                        aster[forloop_i].scale      = ASTER_MED;
+                        aster[forloop_i].mass       = MASS_MED;
+                    }
+                    else              /*50%*/
+                    {
+                        aster[forloop_i].scale      = ASTER_LARGE;
+                        aster[forloop_i].mass       = MASS_LARGE;
+                    }
                     aster[forloop_i].rot        = 0.f;
                     aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;
                     aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;
@@ -705,7 +747,10 @@ int main                    (int          argc,
                                     SDL_SetWindowTitle(win_main,win_title);
                                     /*decide whether to spawn little asteroid*/
                                     if(aster[forloop_k].scale < 2.f)     /*SMALL -> DESPAWN*/
+                                    {
                                        aster[forloop_k].is_spawned = 0;
+                                       aster[forloop_k].collided   = -1;
+                                    }
                                     else
                                     {
                                         if(aster[forloop_k].scale  < 4.f) /*MED -> SMALL*/
@@ -734,8 +779,8 @@ int main                    (int          argc,
                                                 {
                                                     aster[forloop_j].is_spawned= 1;
                                                     aster[forloop_j].collided  = -1;
-                                                    aster[forloop_j].scale     = aster[forloop_k].scale;
-                                                    aster[forloop_j].mass      = aster[forloop_k].mass;
+                                                    aster[forloop_j].scale     = ASTER_SMALL;
+                                                    aster[forloop_j].mass      = MASS_SMALL;
                                                     aster[forloop_j].rot       = aster[forloop_k].rot;
                                                     aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
                                                     aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
@@ -762,10 +807,10 @@ int main                    (int          argc,
                     {
                         if(aster[forloop_k].is_spawned)
                         {
-                            for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+                            /*check asteroid against every other asteroid*/
+                            for(forloop_i = forloop_k+1; forloop_i < aster_max_count; forloop_i++)
                             {
-                                /*check asteroid against every other asteroid*/
-                                if(aster[forloop_i].is_spawned && forloop_i != forloop_k)
+                                if(aster[forloop_i].is_spawned)
                                 {
                                     /*collision*/
                                     if(detect_aster_collision(aster[forloop_k].bounds_real,
@@ -842,6 +887,40 @@ int main                    (int          argc,
                     player_rot    = 0.f;
                     player_vel[0] = 0.f;
                     player_vel[1] = 0.f;
+                    /*reset asteroids*/
+                    for(forloop_i = aster_init_count; forloop_i < aster_max_count; forloop_i++)
+                    {
+                        aster[forloop_i].is_spawned = 0;
+                        aster[forloop_i].collided   = -1;
+                    }
+                    for(forloop_i = 0; forloop_i < aster_init_count && forloop_i < aster_max_count; forloop_i++)
+                    {
+                        aster[forloop_i].is_spawned = 1;
+                        aster[forloop_i].collided   = -1;
+                        if(rand() & 0x01)      /*50%*/
+                        {
+                            aster[forloop_i].mass   = MASS_SMALL;
+                            aster[forloop_i].scale  = ASTER_SMALL;
+                        }
+                        else if(rand() & 0x01) /*25%*/
+                        {
+                            aster[forloop_i].mass   = MASS_MED;
+                            aster[forloop_i].scale  = ASTER_MED;
+                        }
+                        else                   /*25%*/
+                        {
+                            aster[forloop_i].mass   = MASS_LARGE;
+                            aster[forloop_i].scale  = ASTER_LARGE;
+                        }
+                        aster[forloop_i].pos[0]     = 1.f;
+                        aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
+                        aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
+                        aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
+                        aster[forloop_i].angle      = (float)(rand()%360);               /*direction between 0 and 360 degrees*/
+                        aster[forloop_i].vel[0]     = aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f);
+                        aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
+                        aster[forloop_i].rot_speed  = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
+                    }
                 }
             }
             frame_time -= min_time; /*decrement remaining time*/
@@ -974,8 +1053,10 @@ void print_sdl_version(void)
 
 void print_usage(void)
 {
-    printf("\nUsage: asteroids [-h|-v] [-p] [-s on|off|lateswap] [-n COUNT]\n\n");
+    printf("\nUsage: asteroids [-h|-v] [-p] [-s on|off|lateswap] [-i COUNT] [-n COUNT]\n\n");
     printf("        -h        Print this help text and exit.\n");
+    printf("        -i COUNT  Sets initial number of asteroids. 'COUNT' is an\n");
+    printf("                  integer between 0 and 16. The default count is 3.\n");
     printf("        -n COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
     printf("                  between 0 and 256. The default max count is 8.\n");
     printf("        -p        Enables asteroid collision physics.\n");

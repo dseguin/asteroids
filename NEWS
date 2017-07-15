@@ -1,3 +1,10 @@
+2017-07-15 - Version 1.2.0 ***
+
+* Added Windows support
+* User can change initial asteroid count with '-i' switch
+* Randomized asteroid spawn size
+* Improved asteroid collision physics
+
 2017-07-11 - Version 1.1.0 ***
 
 * Added asteroid collision physics with other asteroids
