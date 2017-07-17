@@ -1,3 +1,8 @@
+2017-07-16 - Version 1.2.1 ***
+
+* Made asteroid collision physics on by default
+* Added config file support for Windows and Linux
+
 2017-07-15 - Version 1.2.0 ***
 
 * Added Windows support

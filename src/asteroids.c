@@ -1114,14 +1114,15 @@ bool get_config_options(options* config)
     int        i = 0;
     const char config_name[] = "asteroids.conf";
     char       bin_path[FILENAME_MAX];
-    char       config_line[CONF_LINE_MAX];
-    char*      config_token;
+    char       config_line[CONF_LINE_MAX]; /*Full line from config file*/
+    char*      config_token;               /*Space delimited token from line*/
     FILE*      config_file;
 
     #ifdef _WIN32
 
     unsigned int bin_path_len = 0;
     /*get path to executable*/
+    /*to reduce code separation, this assumes that TCHAR == char*/
     bin_path_len = GetModuleFileName(NULL, bin_path, sizeof(bin_path));
     if(bin_path_len == sizeof(bin_path))
     {
@@ -1133,6 +1134,7 @@ bool get_config_options(options* config)
 
     ssize_t bin_path_len = 0;
     /*get path to executable*/
+    /* /proc/self/exe is only relevant on linux*/
     bin_path_len = readlink("/proc/self/exe", bin_path, sizeof(bin_path));
     if(bin_path_len == -1)
     {
@@ -1147,24 +1149,26 @@ bool get_config_options(options* config)
     {
         if(bin_path[i] == CONFIG_FS_DELIMIT)
         {
-            bin_path[i+1] = '\0';
-            bin_path_len = i+1;
-            break;
+           bin_path[i+1] = '\0';
+           bin_path_len = i+1;
+           break;
         }
         else
-            bin_path[i] = '\0';
+           bin_path[i] = '\0';
         if(i == 0) /*no '/' or '\\' character*/
         {
-            fprintf(stderr, "Error parsing executable path: No directories\n");
-            return false;
+           fprintf(stderr, "Error parsing executable path: No directories\n");
+           return false;
         }
     }
+    /*Append config filename to bin_path*/
     if(bin_path_len + sizeof(config_name) >= FILENAME_MAX)
     {
         fprintf(stderr, "Error parsing executable path: Path too long\n");
         return false;
     }
     strcat(bin_path, config_name);
+
     config_file = fopen(bin_path, "r");
     if(config_file == NULL) /*no config file*/
     {
@@ -1194,10 +1198,12 @@ bool get_config_options(options* config)
     while(!feof(config_file))
     {
         if(!fgets(config_line, CONF_LINE_MAX, config_file))
-            break;
+            break; /*EOF*/
+        /*get first token*/
         config_token = strtok(config_line, " =");
         if(!strcmp(config_token, "vsync"))              /*vsync*/
         {
+            /*get second token*/
             config_token = strtok(NULL, " =");
             if(!strcmp(config_token, "on"))
                 config->vsync = 1;
@@ -1208,6 +1214,7 @@ bool get_config_options(options* config)
         }
         else if(!strcmp(config_token, "physics"))       /*physics_enabled*/
         {
+            /*get second token*/
             config_token = strtok(NULL, " =");
             if(!strcmp(config_token, "on"))
                 config->physics_enabled = true;
@@ -1216,6 +1223,7 @@ bool get_config_options(options* config)
         }
         else if(!strcmp(config_token, "init-count"))    /*aster_init_count*/
         {
+            /*get second token*/
             config_token = strtok(NULL, " =");
             i = atoi(config_token);
             if(i > 0 && i < 16)
@@ -1225,6 +1233,7 @@ bool get_config_options(options* config)
         }
         else if(!strcmp(config_token, "max-count"))     /*aster_max_count*/
         {
+            /*get second token*/
             config_token = strtok(NULL, " =");
             i = atoi(config_token);
             if(i > 0 && i < 256)

@@ -16,6 +16,24 @@ Controls:
 Run the program with '-h' for command line options.
 
 
+Configuration
+-------------
+The "asteroids.conf" configuration file sits in the same directory
+as the executable. The options are as follows:
+
+  vsync      STATE   - where "STATE" can be on, off, or lateswap
+  physics    STATE   - where "STATE" can be on or off
+  init-count COUNT   - where "COUNT" can be an integer between 0 and 16
+  max-count  COUNT   - where "COUNT" can be an integer between 0 and 256
+
+Example asteroids.conf:
+
+  vsync on
+  physics on
+  init-count 3
+  max-count 8
+
+
 Dependencies
 ------------
   SDL >= 2.0
