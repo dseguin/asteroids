@@ -35,10 +35,16 @@
   #include <SDL_opengl_glext.h>
   #include <SDL_revision.h>
   #pragma comment(lib, "opengl32.lib")
+  #define CONFIG_FS_DELIMIT '\\'
 #else
+  #if !defined _POSIX_C_SOURCE || !(_POSIX_C_SOURCE >= 200112L)
+    #define _POSIX_C_SOURCE 200112L /*needed for readlink()*/
+  #endif
   #include <GL/gl.h>
   #include <SDL2/SDL.h>
   #include <SDL2/SDL_revision.h>
+  #include <unistd.h>
+  #define CONFIG_FS_DELIMIT '/'
 #endif
 
 #include <stdio.h>
@@ -49,7 +55,7 @@
 
 #define ASTEROIDS_VER_MAJOR 1
 #define ASTEROIDS_VER_MINOR 2
-#define ASTEROIDS_VER_PATCH 0
+#define ASTEROIDS_VER_PATCH 1
 
 #ifndef M_PI
   #ifdef M_PIl
@@ -60,6 +66,7 @@
   #endif
 #endif
 
+#define CONF_LINE_MAX   128
 #define true            '\x01'
 #define false           '\x00'
 #define ASTER_LARGE     5.f
@@ -112,6 +119,14 @@ typedef struct asteroid {
     GLfloat     rot_speed;         /*rotation speed*/
     GLfloat     bounds_real[6][6]; /*bounding triangles*/
 } asteroid;
+
+/*** config options ***/
+typedef struct options {
+    bool        physics_enabled;   /*enables asteroid collision physics*/
+    int         vsync;             /*1 = enabled, 0 = disabled, -1 = lateswap*/
+    int         aster_max_count;   /*maximum number of asteroids that can spawn*/
+    int         aster_init_count;  /*number of asteroids that spawn initially*/
+} options;
 
 /*** prototypes ***/
 /* Print info about SDL */
@@ -169,6 +184,19 @@ void get_real_point_pos     (const float* original_vector,
 bool detect_aster_collision (float aster_a[6][6],
                              float aster_b[6][6]);
 
+/* Get configuration settings.
+ *
+ *     config - options struct to be returned
+ *
+ * If a configuration file exists, it will attempt to read it
+ * and update any options in the config struct. If no configuration
+ * file can be found, it will attempt to create one using options
+ * in the config struct.
+ *
+ * Returns true if operation succeeds, false if an error occurs.
+ **/
+bool get_config_options     (options* config);
+
 int main                    (int          argc,
                              char**       argv)
 {
@@ -180,8 +208,7 @@ int main                    (int          argc,
                     key_pressed_d     = false,
                     key_pressed_space = false,
                     player_died       = false,
-                    skip_remain_time  = false,     /*on low framerates, skip remaining delta time*/
-                    physics_enabled   = false;     /*enable asteroid collision physics*/
+                    skip_remain_time  = false;     /*on low framerates, skip remaining delta time*/
     Uint32          current_timer     = 0,         /*updated at the start of every loop*/
                     ten_second_timer  = 0,         /*updated every 10000 milliseconds*/
                     prev_timer        = 0;         /*current_timer - prev_timer = frame_time*/
@@ -191,10 +218,7 @@ int main                    (int          argc,
     int             forloop_i         = 0,
                     forloop_j         = 0,
                     forloop_k         = 0,
-                    vsync             = 1,
-                    a_count           = 8,         /*input asteroid max count*/
-                    aster_max_count   = 8,         /*actual asteroid max count*/
-                    aster_init_count  = 3;         /*initial spawn count*/
+                    a_count           = 8;         /*input asteroid count*/
     unsigned int    score             = 0,
                     top_score         = 0;
     char            win_title[128]    = {'\0'};
@@ -254,7 +278,11 @@ int main                    (int          argc,
     GLfloat         projectile_pos[]       = {0.f,0.f}; /*[x,y]*/
     GLfloat         projectile_real_pos[]  = {0.f,0.f}; /*[x,y]*/
     GLfloat         blast_scale            = 1.f;
-    asteroid*       aster; /*reserve memory for aster_max_count asteroids*/
+    options         config                 = {true, 1, 8, 3}; /*default configuration*/
+    asteroid*       aster; /*reserve memory for config.aster_max_count asteroids*/
+
+    if(!get_config_options(&config))
+        fprintf(stderr, "Error reading config file.\n");
 
     /*parse args*/
     for(forloop_i = 1; forloop_i < argc; forloop_i++)
@@ -277,11 +305,11 @@ int main                    (int          argc,
                                return 1;
                            }
                            if(!strcmp(argv[forloop_i+1], "on"))
-                               vsync = 1;
+                               config.vsync = 1;
                            else if(!strcmp(argv[forloop_i+1], "off"))
-                               vsync = 0;
+                               config.vsync = 0;
                            else if(!strcmp(argv[forloop_i+1], "lateswap"))
-                               vsync = -1;
+                               config.vsync = -1;
                            else
                            {
                                fprintf(stderr, "Invalid Vsync parameter '%s'\n", argv[forloop_i+1]);
@@ -298,7 +326,7 @@ int main                    (int          argc,
                            }
                            a_count = atoi(argv[forloop_i+1]);
                            if(a_count > 0 && a_count < 256)
-                               aster_max_count = a_count;
+                               config.aster_max_count = a_count;
                            else
                            {
                                fprintf(stderr, "Number of asteroids must be an integer between 0 and 256\n");
@@ -307,7 +335,10 @@ int main                    (int          argc,
                            }
                            break;
                 /*-p enable asteroid collision physics*/
-                case 'p' : physics_enabled = true;
+                case 'p' : config.physics_enabled = true;
+                           break;
+                /*-d disable asteroid collision physics*/
+                case 'd' : config.physics_enabled = false;
                            break;
                 /*-i initial asteroid count*/
                 case 'i' : if(forloop_i+2 > argc)
@@ -318,7 +349,7 @@ int main                    (int          argc,
                            }
                            a_count = atoi(argv[forloop_i+1]);
                            if(a_count > 0 && a_count < 16)
-                               aster_init_count = a_count;
+                               config.aster_init_count = a_count;
                            else
                            {
                                fprintf(stderr, "Number of asteroids must be an integer between 0 and 16\n");
@@ -334,8 +365,8 @@ int main                    (int          argc,
     }
 
     /*initialize asteroids*/
-    aster = (struct asteroid*) malloc(sizeof(struct asteroid)*aster_max_count);
-    for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+    aster = (struct asteroid*) malloc(sizeof(struct asteroid)*config.aster_max_count);
+    for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
     {
         aster[forloop_i].is_spawned = 0;
         aster[forloop_i].collided   = -1;
@@ -406,15 +437,15 @@ int main                    (int          argc,
     printf("OpenGL version: %s\n\
        shader: %s\n\
        vendor: %s\n\
-       renderer: %s\n\n**********\n",
+       renderer: %s\n**********\n",
        glGetString(GL_VERSION),
        glGetString(GL_SHADING_LANGUAGE_VERSION),
        glGetString(GL_VENDOR),
        glGetString(GL_RENDERER));
     /*set late swap tearing, or VSync if not*/
-    if(SDL_GL_SetSwapInterval(vsync))
+    if(SDL_GL_SetSwapInterval(config.vsync))
     {
-        if(vsync == -1)
+        if(config.vsync == -1)
         {
             fprintf(stderr, "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n", SDL_GetError());
             SDL_ClearError();
@@ -424,14 +455,14 @@ int main                    (int          argc,
                 SDL_ClearError();
             }
         }
-        else if(vsync == 1)
+        else if(config.vsync == 1)
         {
             fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.\n", SDL_GetError());
             SDL_ClearError();
         }
         else
         {
-            fprintf(stderr, "SDL Set Swap Interval: %s\nUnknown vsync option '%d'\n", SDL_GetError(), vsync);
+            fprintf(stderr, "SDL Set Swap Interval: %s\nUnknown vsync option '%d'\n", SDL_GetError(), config.vsync);
             SDL_ClearError();
         }
     }
@@ -456,7 +487,7 @@ int main                    (int          argc,
 
     /*set RNG and spawn 3 asteroids*/
     srand((unsigned)time(NULL));
-    for(forloop_i=0; forloop_i < aster_init_count && forloop_i < aster_max_count; forloop_i++)
+    for(forloop_i=0; forloop_i < config.aster_init_count && forloop_i < config.aster_max_count; forloop_i++)
     {
         aster[forloop_i].is_spawned = 1;
         aster[forloop_i].collided   = -1;
@@ -501,7 +532,7 @@ int main                    (int          argc,
         {
             ten_second_timer = current_timer;
             /*spawn new asteroid*/
-            for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+            for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
             {
                 if(!aster[forloop_i].is_spawned)
                 {
@@ -606,7 +637,7 @@ int main                    (int          argc,
                     projectile_real_pos[1] = 0.04f * cos(player_rot*M_PI/180.f);
                 }
                 /*asteroids*/
-                for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+                for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
                 {
                     if(aster[forloop_i].is_spawned)
                     {
@@ -663,7 +694,7 @@ int main                    (int          argc,
                 player_bounds[5] = temp_point2[1];
 
                 /*cycle through each asteroid 'k'*/
-                for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
+                for(forloop_k = 0; forloop_k < config.aster_max_count; forloop_k++)
                 {
                     if(aster[forloop_k].is_spawned)
                     {
@@ -771,7 +802,7 @@ int main                    (int          argc,
                                         aster[forloop_k].vel[1]    = aster[forloop_k].vel[1] * cos(aster[forloop_k].angle*M_PI/180.f);
                                         aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
                                         /*chance to spawn additional asteroid*/
-                                        for(forloop_j = 0; forloop_j < aster_max_count; forloop_j++)
+                                        for(forloop_j = 0; forloop_j < config.aster_max_count; forloop_j++)
                                         {
                                             if(!aster[forloop_j].is_spawned)
                                             {
@@ -800,15 +831,15 @@ int main                    (int          argc,
                         } /* check projectile collision */
                     } /* if(asteroid k is spawned) */
                 } /* for(forloop_k) boundary checking */
-                if(physics_enabled)
+                if(config.physics_enabled)
                 {
                     /*check asteroid-asteroid collision*/
-                    for(forloop_k = 0; forloop_k < aster_max_count; forloop_k++)
+                    for(forloop_k = 0; forloop_k < config.aster_max_count; forloop_k++)
                     {
                         if(aster[forloop_k].is_spawned)
                         {
                             /*check asteroid against every other asteroid*/
-                            for(forloop_i = forloop_k+1; forloop_i < aster_max_count; forloop_i++)
+                            for(forloop_i = forloop_k+1; forloop_i < config.aster_max_count; forloop_i++)
                             {
                                 if(aster[forloop_i].is_spawned)
                                 {
@@ -865,7 +896,7 @@ int main                    (int          argc,
                             }
                         }
                     } /* asteroid-asteroid collision */
-                } /* if(physics_enabled) */
+                } /* if(config.physics_enabled) */
             } /* if(!player_died) */
             if(player_died)
             {
@@ -888,12 +919,12 @@ int main                    (int          argc,
                     player_vel[0] = 0.f;
                     player_vel[1] = 0.f;
                     /*reset asteroids*/
-                    for(forloop_i = aster_init_count; forloop_i < aster_max_count; forloop_i++)
+                    for(forloop_i = config.aster_init_count; forloop_i < config.aster_max_count; forloop_i++)
                     {
                         aster[forloop_i].is_spawned = 0;
                         aster[forloop_i].collided   = -1;
                     }
-                    for(forloop_i = 0; forloop_i < aster_init_count && forloop_i < aster_max_count; forloop_i++)
+                    for(forloop_i = 0; forloop_i < config.aster_init_count && forloop_i < config.aster_max_count; forloop_i++)
                     {
                         aster[forloop_i].is_spawned = 1;
                         aster[forloop_i].collided   = -1;
@@ -975,7 +1006,7 @@ int main                    (int          argc,
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         /*asteroids*/
-        for(forloop_i = 0; forloop_i < aster_max_count; forloop_i++)
+        for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
         {
             if(aster[forloop_i].is_spawned)
             {
@@ -1045,7 +1076,8 @@ void print_sdl_version(void)
     SDL_VERSION(&ver_comp);
     SDL_GetVersion(&ver_link);
 
-    printf("SDL version (compiled): %d.%d.%d-%s\
+    printf("**********\
+            \nSDL version (compiled): %d.%d.%d-%s\
             \nSDL version (current): %d.%d.%d-%s\n",
             ver_comp.major, ver_comp.minor, ver_comp.patch, SDL_REVISION,
             ver_link.major, ver_link.minor, ver_link.patch, SDL_GetRevision());
@@ -1053,13 +1085,14 @@ void print_sdl_version(void)
 
 void print_usage(void)
 {
-    printf("\nUsage: asteroids [-h|-v] [-p] [-s on|off|lateswap] [-i COUNT] [-n COUNT]\n\n");
+    printf("\nUsage: asteroids [-h|-v] [-p|-d] [-s on|off|lateswap] [-i COUNT] [-n COUNT]\n\n");
+    printf("        -d        Disables asteroid collision physics.\n");
     printf("        -h        Print this help text and exit.\n");
     printf("        -i COUNT  Sets initial number of asteroids. 'COUNT' is an\n");
     printf("                  integer between 0 and 16. The default count is 3.\n");
     printf("        -n COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
     printf("                  between 0 and 256. The default max count is 8.\n");
-    printf("        -p        Enables asteroid collision physics.\n");
+    printf("        -p        Enables asteroid collision physics. This is the default.\n");
     printf("        -s VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
     printf("                  or lateswap. The default is on.\n");
     printf("        -v        Print version info and exit.\n\n");
@@ -1074,6 +1107,134 @@ void print_version(void)
     printf("Copyright (c) 2017 David Seguin <davidseguin@live.ca>\n");
     printf("Homepage: <https://github.com/dseguin/asteroids>\n");
     printf("Compiled against SDL version %d.%d.%d-%s\n\n", ver_comp.major, ver_comp.minor, ver_comp.patch, SDL_REVISION);
+}
+
+bool get_config_options(options* config)
+{
+    int        i = 0;
+    const char config_name[] = "asteroids.conf";
+    char       bin_path[FILENAME_MAX];
+    char       config_line[CONF_LINE_MAX];
+    char*      config_token;
+    FILE*      config_file;
+
+    #ifdef _WIN32
+
+    unsigned int bin_path_len = 0;
+    /*get path to executable*/
+    bin_path_len = GetModuleFileName(NULL, bin_path, sizeof(bin_path));
+    if(bin_path_len == sizeof(bin_path))
+    {
+        fprintf(stderr, "GetModuleFileName error: Path size exceeded %d\n", FILENAME_MAX);
+        return false;
+    }
+
+    #else /*linux*/
+
+    ssize_t bin_path_len = 0;
+    /*get path to executable*/
+    bin_path_len = readlink("/proc/self/exe", bin_path, sizeof(bin_path));
+    if(bin_path_len == -1)
+    {
+        perror("readlink error");
+        return false;
+    }
+
+    #endif
+
+    /*strip exe name from path*/
+    for(i = bin_path_len - 1; i >= 0; i--)
+    {
+        if(bin_path[i] == CONFIG_FS_DELIMIT)
+        {
+            bin_path[i+1] = '\0';
+            bin_path_len = i+1;
+            break;
+        }
+        else
+            bin_path[i] = '\0';
+        if(i == 0) /*no '/' or '\\' character*/
+        {
+            fprintf(stderr, "Error parsing executable path: No directories\n");
+            return false;
+        }
+    }
+    if(bin_path_len + sizeof(config_name) >= FILENAME_MAX)
+    {
+        fprintf(stderr, "Error parsing executable path: Path too long\n");
+        return false;
+    }
+    strcat(bin_path, config_name);
+    config_file = fopen(bin_path, "r");
+    if(config_file == NULL) /*no config file*/
+    {
+        perror("fopen read config file");
+        fprintf(stderr, "%s either does not exist or is not accessible. Attempting to generate config file.\n", bin_path);
+        /*generate config*/
+        config_file = fopen(bin_path, "w");
+        if(config_file == NULL)
+        {
+            perror("fopen write config file");
+            return false;
+        }
+        fprintf(config_file, "# --- Simple Asteroids configuration file ---\n#\n");
+        fprintf(config_file, "# Only valid options are recognized. Everything else is ignored.\n\n");
+        fprintf(config_file, "# VSync option. Can be 'on', 'off', or 'lateswap'. The default is 'on'.\n");
+        fprintf(config_file, "vsync = on\n\n");
+        fprintf(config_file, "# Enables asteroid collision physics. Can be 'on' or 'off'. The default is 'on'.\n");
+        fprintf(config_file, "physics = on\n\n");
+        fprintf(config_file, "# Number of asteroids that spawn initially. Can be between 0 and 16. The default is 3.\n");
+        fprintf(config_file, "init-count = 3\n\n");
+        fprintf(config_file, "# Maximum number of asteroids that can spawn. Can be between 0 and 256. The default is 8.\n");
+        fprintf(config_file, "max-count = 8\n");
+        fclose(config_file);
+        return true;
+    }
+    /*read existing config*/
+    while(!feof(config_file))
+    {
+        if(!fgets(config_line, CONF_LINE_MAX, config_file))
+            break;
+        config_token = strtok(config_line, " =");
+        if(!strcmp(config_token, "vsync"))              /*vsync*/
+        {
+            config_token = strtok(NULL, " =");
+            if(!strcmp(config_token, "on"))
+                config->vsync = 1;
+            if(!strcmp(config_token, "off"))
+                config->vsync = 0;
+            if(!strcmp(config_token, "lateswap"))
+                config->vsync = -1;
+        }
+        else if(!strcmp(config_token, "physics"))       /*physics_enabled*/
+        {
+            config_token = strtok(NULL, " =");
+            if(!strcmp(config_token, "on"))
+                config->physics_enabled = true;
+            if(!strcmp(config_token, "off"))
+                config->physics_enabled = false;
+        }
+        else if(!strcmp(config_token, "init-count"))    /*aster_init_count*/
+        {
+            config_token = strtok(NULL, " =");
+            i = atoi(config_token);
+            if(i > 0 && i < 16)
+                config->aster_init_count = i;
+            else
+                fprintf(stderr, "Warning: In config file, 'init-count' must be an integer between 0 and 16.\n");
+        }
+        else if(!strcmp(config_token, "max-count"))     /*aster_max_count*/
+        {
+            config_token = strtok(NULL, " =");
+            i = atoi(config_token);
+            if(i > 0 && i < 256)
+                config->aster_max_count = i;
+            else
+                fprintf(stderr, "Warning: In config file, 'max-count' must be an integer between 0 and 256.\n");
+        }
+    }
+    fclose(config_file);
+    return true;
 }
 
 int detect_point_in_triangle(const float  px,
