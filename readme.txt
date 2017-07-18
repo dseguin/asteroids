@@ -21,10 +21,17 @@ Configuration
 The "asteroids.conf" configuration file sits in the same directory
 as the executable. The options are as follows:
 
-  vsync      STATE   - where "STATE" can be on, off, or lateswap
-  physics    STATE   - where "STATE" can be on or off
-  init-count COUNT   - where "COUNT" can be an integer between 0 and 16
-  max-count  COUNT   - where "COUNT" can be an integer between 0 and 256
+  vsync       STATE   - where "STATE" can be on, off, or lateswap
+  physics     STATE   - where "STATE" can be on or off
+  init-count  COUNT   - where "COUNT" can be an integer between 0 and 16
+  max-count   COUNT   - where "COUNT" can be an integer between 0 and 256
+  aster-scale SCALE   - where "SCALE" can be a number between 0.5 and 2
+  aster-massL MASS    - where "MASS" can be a number between 0.1 and 5
+  aster-massM MASS    - where "MASS" can be a number between 0.1 and 5
+  aster-massS MASS    - where "MASS" can be a number between 0.1 and 5
+  fullscreen  STATE   - where "STATE" can be on, off, or desktop
+  full-res    RES     - where "RES" is a WxH screen resolution
+  win-res     RES     - where "RES" is a WxH screen resolution
 
 Example asteroids.conf:
 
@@ -32,11 +39,18 @@ Example asteroids.conf:
   physics on
   init-count 3
   max-count 8
+  aster-scale 1
+  aster-massL 1
+  aster-massM 1
+  aster-massS 1
+  fullscreen desktop
+  full-res 800x600
+  win-res 800x600
 
 
 Dependencies
 ------------
-  SDL >= 2.0
+  SDL >= 2.0.1
   OpenGL 1.5 (or 1.1 with ARB_vertex_buffer_object extension)
 
 The source is almost entirely compliant with ANSI C and should

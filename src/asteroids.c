@@ -54,8 +54,8 @@
 #include <time.h>
 
 #define ASTEROIDS_VER_MAJOR 1
-#define ASTEROIDS_VER_MINOR 2
-#define ASTEROIDS_VER_PATCH 1
+#define ASTEROIDS_VER_MINOR 3
+#define ASTEROIDS_VER_PATCH 0
 
 #ifndef M_PI
   #ifdef M_PIl
@@ -120,12 +120,25 @@ typedef struct asteroid {
     GLfloat     bounds_real[6][6]; /*bounding triangles*/
 } asteroid;
 
+/*** resolution options ***/
+typedef struct resolution{
+    int         width;
+    int         height;
+    int         refresh;
+} resolution;
 /*** config options ***/
 typedef struct options {
     bool        physics_enabled;   /*enables asteroid collision physics*/
     int         vsync;             /*1 = enabled, 0 = disabled, -1 = lateswap*/
     int         aster_max_count;   /*maximum number of asteroids that can spawn*/
     int         aster_init_count;  /*number of asteroids that spawn initially*/
+    float       aster_scale;       /*scale modifier*/
+    float       aster_mass_large;  /*mass modifiers*/
+    float       aster_mass_med;
+    float       aster_mass_small;
+    int         fullscreen;        /*0 = windowed, 1 = fullscreen, 2 = desktop fullscreen*/
+    resolution  winres;
+    resolution  fullres;
 } options;
 
 /*** prototypes ***/
@@ -213,18 +226,22 @@ int main                    (int          argc,
                     ten_second_timer  = 0,         /*updated every 10000 milliseconds*/
                     prev_timer        = 0;         /*current_timer - prev_timer = frame_time*/
     float           frame_time        = 0.f,       /*time since last loop*/
-                    min_time          = 0.f;       /*min(frame_time, target_time)*/
+                    min_time          = 0.f,       /*min(frame_time, target_time)*/
+                    a_scale           = 1.f;       /*input asteroid scale/mass modifier*/
     const float     target_time       = 100.f/6.f; /*ideal frame time (16.7ms)*/
     int             forloop_i         = 0,
                     forloop_j         = 0,
                     forloop_k         = 0,
-                    a_count           = 8;         /*input asteroid count*/
+                    a_count           = 8,         /*input asteroid count*/
+                    width_real        = 0,         /*actual window width/height*/
+                    height_real       = 0;
     unsigned int    score             = 0,
                     top_score         = 0;
     char            win_title[128]    = {'\0'};
     SDL_Window *    win_main;
     SDL_GLContext   win_main_gl;
     SDL_DisplayMode mode_current,
+                    mode_target,
                     mode_default      = {0,800,600,0,0};
     SDL_Event       event_main;
     /*all vertexes in one array*/
@@ -278,7 +295,11 @@ int main                    (int          argc,
     GLfloat         projectile_pos[]       = {0.f,0.f}; /*[x,y]*/
     GLfloat         projectile_real_pos[]  = {0.f,0.f}; /*[x,y]*/
     GLfloat         blast_scale            = 1.f;
-    options         config                 = {true, 1, 8, 3}; /*default configuration*/
+    GLfloat         left_clip              = -1.f;      /*screen bounds*/
+    GLfloat         right_clip             = 1.f;
+    GLfloat         top_clip               = 1.f;
+    GLfloat         bottom_clip            = -1.f;
+    options         config                 = {true,1,8,3,1.f,1.f,1.f,1.f,0,{800,600,60},{0,0,0}};
     asteroid*       aster; /*reserve memory for config.aster_max_count asteroids*/
 
     if(!get_config_options(&config))
@@ -357,6 +378,87 @@ int main                    (int          argc,
                                return 1;
                            }
                            break;
+                /*-b asteroid scale modifier*/
+                case 'b' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -b requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           a_scale = (float) atof(argv[forloop_i+1]);
+                           if(a_scale > 0.4999f && a_scale < 2.0001f)
+                               config.aster_scale = a_scale;
+                           else
+                           {
+                               fprintf(stderr, "Asteroid scale must be a number between 0.5 and 2\n");
+                               print_usage();
+                               return 1;
+                           }
+                           break;
+                /*-m? asteroid mass modifier*/
+                case 'm' : if(argv[forloop_i][2] == 'l')      /*-ml mass large*/
+                           {
+                               if(forloop_i+2 > argc)
+                               {
+                                   fprintf(stderr, "Option -ml requires a specifier\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               a_scale = (float) atof(argv[forloop_i+1]);
+                               if(a_scale > 0.0999f && a_scale < 5.0001f)
+                                   config.aster_mass_large = a_scale;
+                               else
+                               {
+                                   fprintf(stderr, "Asteroid mass must be a number between 0.1 and 5\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               break;
+                           }
+                           else if(argv[forloop_i][2] == 'm') /*-mm mass medium*/
+                           {
+                               if(forloop_i+2 > argc)
+                               {
+                                   fprintf(stderr, "Option -mm requires a specifier\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               a_scale = (float) atof(argv[forloop_i+1]);
+                               if(a_scale > 0.0999f && a_scale < 5.0001f)
+                                   config.aster_mass_med = a_scale;
+                               else
+                               {
+                                   fprintf(stderr, "Asteroid mass must be a number between 0.1 and 5\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               break;
+                           }
+                           else if(argv[forloop_i][2] == 's') /*-ms mass small*/
+                           {
+                               if(forloop_i+2 > argc)
+                               {
+                                   fprintf(stderr, "Option -ms requires a specifier\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               a_scale = (float) atof(argv[forloop_i+1]);
+                               if(a_scale > 0.0999f && a_scale < 5.0001f)
+                                   config.aster_mass_small = a_scale;
+                               else
+                               {
+                                   fprintf(stderr, "Asteroid mass must be a number between 0.1 and 5\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               break;
+                           }
+                           else
+                           {
+                               fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
+                               print_usage();
+                               return 1;
+                           }
                 default  : fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
                            print_usage();
                            return 1;
@@ -370,8 +472,8 @@ int main                    (int          argc,
     {
         aster[forloop_i].is_spawned = 0;
         aster[forloop_i].collided   = -1;
-        aster[forloop_i].mass       = MASS_LARGE;
-        aster[forloop_i].scale      = ASTER_LARGE;
+        aster[forloop_i].mass       = config.aster_mass_large * MASS_LARGE;
+        aster[forloop_i].scale      = config.aster_scale * ASTER_LARGE;
         aster[forloop_i].pos[0]     = 1.f;
         aster[forloop_i].pos[1]     = 1.f;
         aster[forloop_i].vel[0]     = 0.f;
@@ -397,19 +499,26 @@ int main                    (int          argc,
     }
 
     atexit(SDL_Quit);
-    print_sdl_version();
-    /*closest mode to 800x600*/
-    if(!(SDL_GetClosestDisplayMode(0, &mode_default, &mode_current)))
+    /*find closest mode*/
+    if(config.fullscreen)
+    {
+        mode_target.w            = config.fullres.width;
+        mode_target.h            = config.fullres.height;
+        mode_target.refresh_rate = config.fullres.refresh;
+    }
+    else
+    {
+        mode_target.w            = config.winres.width;
+        mode_target.h            = config.winres.height;
+        mode_target.refresh_rate = config.winres.refresh;
+    }
+    if(!(SDL_GetClosestDisplayMode(0, &mode_target, &mode_current)))
     {
         fprintf(stderr, "SDL Get Display Mode: %s\n", SDL_GetError());
         SDL_ClearError();
         mode_current = mode_default;
     }
 
-    printf("Display: %dx%d @%dHz\n",
-           mode_current.w,
-           mode_current.h,
-           mode_current.refresh_rate);
     /*create window*/
     if(!(win_main = SDL_CreateWindow("Simple Asteroids",
                                      SDL_WINDOWPOS_UNDEFINED,
@@ -421,27 +530,37 @@ int main                    (int          argc,
         fprintf(stderr, "SDL Create Window: %s\n", SDL_GetError());
         return 1;
     }
-
-    if(SDL_SetWindowDisplayMode(win_main, &mode_current))
+    /*set resolution*/
+    if(config.fullscreen == 1)
     {
-        fprintf(stderr, "SDL Set Display Mode: %s\n", SDL_GetError());
-        SDL_ClearError();
+        if(SDL_SetWindowDisplayMode(win_main, &mode_current))
+        {
+            fprintf(stderr, "SDL Set Display Mode: %s\n", SDL_GetError());
+            SDL_ClearError();
+        }
+        if(SDL_SetWindowFullscreen(win_main, SDL_WINDOW_FULLSCREEN))
+        {
+            fprintf(stderr, "SDL Set Fullscreen: %s\n", SDL_GetError());
+            return 1;
+        }
     }
+    else if(config.fullscreen == 2)
+    {
+        if(SDL_SetWindowFullscreen(win_main, SDL_WINDOW_FULLSCREEN_DESKTOP))
+        {
+            fprintf(stderr, "SDL Set Fullscreen: %s\n", SDL_GetError());
+            SDL_ClearError();
+            SDL_SetWindowSize(win_main, mode_current.w, mode_current.h);
+        }
+    }
+    else
+        SDL_SetWindowSize(win_main, mode_target.w, mode_target.h);
     /*create GL context*/
     if(!(win_main_gl = SDL_GL_CreateContext(win_main)))
     {
         fprintf(stderr, "SDL GLContext: %s\n", SDL_GetError());
         return 1;
     }
-    /*print GL info*/
-    printf("OpenGL version: %s\n\
-       shader: %s\n\
-       vendor: %s\n\
-       renderer: %s\n**********\n",
-       glGetString(GL_VERSION),
-       glGetString(GL_SHADING_LANGUAGE_VERSION),
-       glGetString(GL_VENDOR),
-       glGetString(GL_RENDERER));
     /*set late swap tearing, or VSync if not*/
     if(SDL_GL_SetSwapInterval(config.vsync))
     {
@@ -466,6 +585,23 @@ int main                    (int          argc,
             SDL_ClearError();
         }
     }
+    /*get real screen size/bounds*/
+    SDL_GL_GetDrawableSize(win_main, &width_real, &height_real);
+    left_clip   = left_clip   * (width_real/600.f);
+    right_clip  = right_clip  * (width_real/600.f);
+    top_clip    = top_clip    * (height_real/600.f);
+    bottom_clip = bottom_clip * (height_real/600.f);
+    /*print info*/
+    print_sdl_version();
+    printf("Display: %dx%d @%dHz\n", width_real, height_real, mode_current.refresh_rate);
+    printf("OpenGL version: %s\n\
+       shader: %s\n\
+       vendor: %s\n\
+       renderer: %s\n**********\n",
+       glGetString(GL_VERSION),
+       glGetString(GL_SHADING_LANGUAGE_VERSION),
+       glGetString(GL_VENDOR),
+       glGetString(GL_RENDERER));
 
     /*fetch GL extension functions*/
     if(!SDL_GL_ExtensionSupported("GL_ARB_vertex_buffer_object"))
@@ -493,19 +629,20 @@ int main                    (int          argc,
         aster[forloop_i].collided   = -1;
         if(rand() & 0x01)      /*50%*/
         {
-            aster[forloop_i].mass   = MASS_SMALL;
-            aster[forloop_i].scale  = ASTER_SMALL;
+            aster[forloop_i].mass   = config.aster_mass_small * MASS_SMALL;
+            aster[forloop_i].scale  = config.aster_scale * ASTER_SMALL;
         }
         else if(rand() & 0x01) /*25%*/
         {
-            aster[forloop_i].mass   = MASS_MED;
-            aster[forloop_i].scale  = ASTER_MED;
+            aster[forloop_i].mass   = config.aster_mass_med * MASS_MED;
+            aster[forloop_i].scale  = config.aster_scale * ASTER_MED;
         }
         else                   /*25%*/
         {
-            aster[forloop_i].mass   = MASS_LARGE;
-            aster[forloop_i].scale  = ASTER_LARGE;
+            aster[forloop_i].mass   = config.aster_mass_large * MASS_LARGE;
+            aster[forloop_i].scale  = config.aster_scale * ASTER_LARGE;
         }
+        aster[forloop_i].pos[0]     = left_clip;
         aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
         aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
         aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
@@ -538,17 +675,17 @@ int main                    (int          argc,
                 {
                     aster[forloop_i].is_spawned = 1;
                     aster[forloop_i].collided   = -1;
-                    aster[forloop_i].pos[0]     = 1.f;
+                    aster[forloop_i].pos[0]     = left_clip;
                     aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f;
                     if(rand() & 0x01) /*50%*/
                     {
-                        aster[forloop_i].scale      = ASTER_MED;
-                        aster[forloop_i].mass       = MASS_MED;
+                        aster[forloop_i].scale      = config.aster_scale * ASTER_MED;
+                        aster[forloop_i].mass       = config.aster_mass_med * MASS_MED;
                     }
                     else              /*50%*/
                     {
-                        aster[forloop_i].scale      = ASTER_LARGE;
-                        aster[forloop_i].mass       = MASS_LARGE;
+                        aster[forloop_i].scale      = config.aster_scale * ASTER_LARGE;
+                        aster[forloop_i].mass       = config.aster_mass_large * MASS_LARGE;
                     }
                     aster[forloop_i].rot        = 0.f;
                     aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;
@@ -611,14 +748,14 @@ int main                    (int          argc,
                    player_rot += 5.f * (min_time/target_time);
                 if(key_pressed_a)
                    player_rot -= 5.f * (min_time/target_time);
-                if(player_pos[0] > 1.f) /*screen wrap*/
-                   player_pos[0] = -0.99f;
-                if(player_pos[0] < -1.f)
-                   player_pos[0] = 0.99f;
-                if(player_pos[1] > 1.f)
-                   player_pos[1] = -0.99f;
-                if(player_pos[1] < -1.f)
-                   player_pos[1] = 0.99f;
+                if(player_pos[0] > right_clip) /*screen wrap*/
+                   player_pos[0] = left_clip + 0.01f;
+                if(player_pos[0] < left_clip)
+                   player_pos[0] = right_clip - 0.01f;
+                if(player_pos[1] > top_clip)
+                   player_pos[1] = bottom_clip + 0.01f;
+                if(player_pos[1] < bottom_clip)
+                   player_pos[1] = top_clip -0.01f;
                 if(player_rot > 360.f) /*clamp rotation*/
                    player_rot = 0.f;
                 if(player_rot < 0.f)
@@ -643,14 +780,14 @@ int main                    (int          argc,
                     {
                         aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * (min_time/target_time);
                         aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * (min_time/target_time);
-                        if(aster[forloop_i].pos[0] > 1.f) /*screen wrap*/
-                           aster[forloop_i].pos[0] = -0.99f;
-                        if(aster[forloop_i].pos[0] < -1.f)
-                           aster[forloop_i].pos[0] = 0.99f;
-                        if(aster[forloop_i].pos[1] > 1.f)
-                           aster[forloop_i].pos[1] = -0.99f;
-                        if(aster[forloop_i].pos[1] < -1.f)
-                           aster[forloop_i].pos[1] = 0.99f;
+                        if(aster[forloop_i].pos[0] > right_clip) /*screen wrap*/
+                           aster[forloop_i].pos[0] = left_clip + 0.01f;
+                        if(aster[forloop_i].pos[0] < left_clip)
+                           aster[forloop_i].pos[0] = right_clip - 0.01f;
+                        if(aster[forloop_i].pos[1] > top_clip)
+                           aster[forloop_i].pos[1] = bottom_clip + 0.01f;
+                        if(aster[forloop_i].pos[1] < bottom_clip)
+                           aster[forloop_i].pos[1] = top_clip - 0.01f;
                         aster[forloop_i].rot += aster[forloop_i].rot_speed * (min_time/target_time);
                         if(aster[forloop_i].rot > 360.f) /*clamp rotation*/
                            aster[forloop_i].rot = 0.f;
@@ -767,32 +904,36 @@ int main                    (int          argc,
                                     projectile_real_pos[0] = 0.04f*sin(player_rot*M_PI/180.f);
                                     projectile_real_pos[1] = 0.04f*cos(player_rot*M_PI/180.f);
                                     /*score*/
-                                    if(aster[forloop_k].scale > 4.f)      /*ASTER_LARGE = 10 points*/
-                                       score += 10;
-                                    else if(aster[forloop_k].scale < 2.f) /*ASTER_SMALL = 1 points*/
-                                       score += 1;
-                                    else                                  /*ASTER_MED = 5 points*/
-                                       score += 5;
+                                    if(aster[forloop_k].scale >
+                                       config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f)      /*ASTER_LARGE = 10 points*/
+                                          score += 10;
+                                    else if(aster[forloop_k].scale <
+                                            config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f) /*ASTER_SMALL = 1 points*/
+                                          score += 1;
+                                    else                                                    /*ASTER_MED = 5 points*/
+                                          score += 5;
                                     /*update scoreboard/window title*/
                                     sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
                                     SDL_SetWindowTitle(win_main,win_title);
                                     /*decide whether to spawn little asteroid*/
-                                    if(aster[forloop_k].scale < 2.f)     /*SMALL -> DESPAWN*/
+                                    if(aster[forloop_k].scale <
+                                       config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f)      /*SMALL -> DESPAWN*/
                                     {
                                        aster[forloop_k].is_spawned = 0;
                                        aster[forloop_k].collided   = -1;
                                     }
                                     else
                                     {
-                                        if(aster[forloop_k].scale  < 4.f) /*MED -> SMALL*/
+                                        if(aster[forloop_k].scale  <
+                                           config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f)  /*MED -> SMALL*/
                                         {
-                                           aster[forloop_k].scale  = ASTER_SMALL;
-                                           aster[forloop_k].mass   = MASS_SMALL;
+                                           aster[forloop_k].scale  = config.aster_scale * ASTER_SMALL;
+                                           aster[forloop_k].mass   = config.aster_mass_small * MASS_SMALL;
                                         }
-                                        else                             /*LARGE -> MED*/
+                                        else                                                /*LARGE -> MED*/
                                         {
-                                           aster[forloop_k].scale  = ASTER_MED;
-                                           aster[forloop_k].mass   = MASS_MED;
+                                           aster[forloop_k].scale  = config.aster_scale * ASTER_MED;
+                                           aster[forloop_k].mass   = config.aster_mass_med * MASS_MED;
                                         }
                                         aster[forloop_k].collided  = -1;
                                         aster[forloop_k].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
@@ -810,8 +951,8 @@ int main                    (int          argc,
                                                 {
                                                     aster[forloop_j].is_spawned= 1;
                                                     aster[forloop_j].collided  = -1;
-                                                    aster[forloop_j].scale     = ASTER_SMALL;
-                                                    aster[forloop_j].mass      = MASS_SMALL;
+                                                    aster[forloop_j].scale     = config.aster_scale * ASTER_SMALL;
+                                                    aster[forloop_j].mass      = config.aster_mass_small * MASS_SMALL;
                                                     aster[forloop_j].rot       = aster[forloop_k].rot;
                                                     aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
                                                     aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
@@ -886,7 +1027,7 @@ int main                    (int          argc,
                                                                        (aster[forloop_k].mass + aster[forloop_i].mass);
                                         }
                                     }
-                                    else if(aster[forloop_k].collided == forloop_i)
+                                    else if(aster[forloop_k].collided == forloop_i || aster[forloop_i].collided == forloop_k)
                                     {
                                         /*'k' and 'i' are no longer colliding*/
                                         aster[forloop_k].collided = -1;
@@ -930,20 +1071,20 @@ int main                    (int          argc,
                         aster[forloop_i].collided   = -1;
                         if(rand() & 0x01)      /*50%*/
                         {
-                            aster[forloop_i].mass   = MASS_SMALL;
-                            aster[forloop_i].scale  = ASTER_SMALL;
+                            aster[forloop_i].mass   = config.aster_mass_small * MASS_SMALL;
+                            aster[forloop_i].scale  = config.aster_scale * ASTER_SMALL;
                         }
                         else if(rand() & 0x01) /*25%*/
                         {
-                            aster[forloop_i].mass   = MASS_MED;
-                            aster[forloop_i].scale  = ASTER_MED;
+                            aster[forloop_i].mass   = config.aster_mass_med * MASS_MED;
+                            aster[forloop_i].scale  = config.aster_scale * ASTER_MED;
                         }
                         else                   /*25%*/
                         {
-                            aster[forloop_i].mass   = MASS_LARGE;
-                            aster[forloop_i].scale  = ASTER_LARGE;
+                            aster[forloop_i].mass   = config.aster_mass_large * MASS_LARGE;
+                            aster[forloop_i].scale  = config.aster_scale * ASTER_LARGE;
                         }
-                        aster[forloop_i].pos[0]     = 1.f;
+                        aster[forloop_i].pos[0]     = left_clip;
                         aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
                         aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
                         aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
@@ -998,11 +1139,11 @@ int main                    (int          argc,
         }
 
         /*** drawing ***/
-        glViewport(0, 0, mode_current.w, mode_current.h);
+        glViewport(0, 0, width_real, height_real);
         glClear(GL_COLOR_BUFFER_BIT);
         glMatrixMode(GL_PROJECTION);
         glLoadIdentity();
-        glOrtho(-1.f, 1.f, -1.f, 1.f, -1.f, 1.f); /*2D ortho projection*/
+        glOrtho(left_clip, right_clip, bottom_clip, top_clip, -1.f, 1.f); /*2D ortho projection*/
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         /*asteroids*/
@@ -1085,17 +1226,25 @@ void print_sdl_version(void)
 
 void print_usage(void)
 {
-    printf("\nUsage: asteroids [-h|-v] [-p|-d] [-s on|off|lateswap] [-i COUNT] [-n COUNT]\n\n");
-    printf("        -d        Disables asteroid collision physics.\n");
-    printf("        -h        Print this help text and exit.\n");
-    printf("        -i COUNT  Sets initial number of asteroids. 'COUNT' is an\n");
-    printf("                  integer between 0 and 16. The default count is 3.\n");
-    printf("        -n COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
-    printf("                  between 0 and 256. The default max count is 8.\n");
-    printf("        -p        Enables asteroid collision physics. This is the default.\n");
-    printf("        -s VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
-    printf("                  or lateswap. The default is on.\n");
-    printf("        -v        Print version info and exit.\n\n");
+    printf("\nUsage: asteroids [-h|-v] [-p|-d] [-s on|off|lateswap] [-b SCALE] [-m<l|m|s> MASS] [-i COUNT] [-n COUNT]\n\n");
+    printf("        -b  SCALE  Sets asteroid size modifier. 'SCALE' is a number\n");
+    printf("                   between 0.5 and 2. The default scale is 1.\n");
+    printf("        -d         Disables asteroid collision physics.\n");
+    printf("        -h         Print this help text and exit.\n");
+    printf("        -i  COUNT  Sets initial number of asteroids. 'COUNT' is an\n");
+    printf("                   integer between 0 and 16. The default count is 3.\n");
+    printf("        -ml MASS   Sets large asteroid mass modifier. 'MASS' is a number\n");
+    printf("                   between 0.1 and 5. The default mass is 1.\n");
+    printf("        -mm MASS   Sets medium asteroid mass modifier. 'MASS' is a number\n");
+    printf("                   between 0.1 and 5. The default mass is 1.\n");
+    printf("        -ms MASS   Sets small asteroid mass modifier. 'MASS' is a number\n");
+    printf("                   between 0.1 and 5. The default mass is 1.\n");
+    printf("        -n  COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
+    printf("                   between 0 and 256. The default max count is 8.\n");
+    printf("        -p         Enables asteroid collision physics. This is the default.\n");
+    printf("        -s  VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
+    printf("                   or lateswap. The default is on.\n");
+    printf("        -v         Print version info and exit.\n\n");
 }
 
 void print_version(void)
@@ -1111,11 +1260,14 @@ void print_version(void)
 
 bool get_config_options(options* config)
 {
-    int        i = 0;
+    int        i     = 0;
+    float      f     = 0.f;
     const char config_name[] = "asteroids.conf";
     char       bin_path[FILENAME_MAX];
-    char       config_line[CONF_LINE_MAX]; /*Full line from config file*/
-    char*      config_token;               /*Space delimited token from line*/
+    char       config_line[CONF_LINE_MAX]; /*full line from config file*/
+    char*      config_token;               /*space delimited token from line*/
+    char*      config_token2;              /*token of a token*/
+    char*      nl;                         /*points to newline char in config_line*/
     FILE*      config_file;
 
     #ifdef _WIN32
@@ -1190,7 +1342,23 @@ bool get_config_options(options* config)
         fprintf(config_file, "# Number of asteroids that spawn initially. Can be between 0 and 16. The default is 3.\n");
         fprintf(config_file, "init-count = 3\n\n");
         fprintf(config_file, "# Maximum number of asteroids that can spawn. Can be between 0 and 256. The default is 8.\n");
-        fprintf(config_file, "max-count = 8\n");
+        fprintf(config_file, "max-count = 8\n\n");
+        fprintf(config_file, "# Asteroid physical properties\n");
+        fprintf(config_file, "# Asteroid scale modifier. Can be between 0.5 and 2. The default is 1.\n");
+        fprintf(config_file, "aster-scale = 1\n\n");
+        fprintf(config_file, "# Large asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
+        fprintf(config_file, "aster-massL = 1\n\n");
+        fprintf(config_file, "# Medium asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
+        fprintf(config_file, "aster-massM = 1\n\n");
+        fprintf(config_file, "# Small asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
+        fprintf(config_file, "aster-massS = 1\n\n");
+        fprintf(config_file, "# Resolution options\n");
+        fprintf(config_file, "# Enable fullscreen. Can be 'on', 'off', or 'desktop' for native resolution. The default is 'off'.\n");
+        fprintf(config_file, "fullscreen = off\n\n");
+        fprintf(config_file, "# Fullscreen resolution. Read in the form of 'WxH'\n");
+        fprintf(config_file, "#full-res = 800x600\n\n");
+        fprintf(config_file, "# Windowed resolution. Read in the form of 'WxH'. The default is 800x600.\n");
+        fprintf(config_file, "win-res = 800x600\n");
         fclose(config_file);
         return true;
     }
@@ -1199,47 +1367,183 @@ bool get_config_options(options* config)
     {
         if(!fgets(config_line, CONF_LINE_MAX, config_file))
             break; /*EOF*/
+        /*strip newline from config_line*/
+        nl = strchr(config_line, '\n');
+        if(nl)
+            *nl = '\0';
         /*get first token*/
         config_token = strtok(config_line, " =");
+        if(config_token == NULL)
+            continue;
         if(!strcmp(config_token, "vsync"))              /*vsync*/
         {
             /*get second token*/
             config_token = strtok(NULL, " =");
-            if(!strcmp(config_token, "on"))
-                config->vsync = 1;
-            if(!strcmp(config_token, "off"))
-                config->vsync = 0;
-            if(!strcmp(config_token, "lateswap"))
-                config->vsync = -1;
+            if(config_token)
+            {
+                if(!strcmp(config_token, "on"))
+                    config->vsync = 1;
+                if(!strcmp(config_token, "off"))
+                    config->vsync = 0;
+                if(!strcmp(config_token, "lateswap"))
+                    config->vsync = -1;
+            }
         }
         else if(!strcmp(config_token, "physics"))       /*physics_enabled*/
         {
             /*get second token*/
             config_token = strtok(NULL, " =");
-            if(!strcmp(config_token, "on"))
-                config->physics_enabled = true;
-            if(!strcmp(config_token, "off"))
-                config->physics_enabled = false;
+            if(config_token)
+            {
+                if(!strcmp(config_token, "on"))
+                    config->physics_enabled = true;
+                if(!strcmp(config_token, "off"))
+                    config->physics_enabled = false;
+            }
         }
         else if(!strcmp(config_token, "init-count"))    /*aster_init_count*/
         {
             /*get second token*/
             config_token = strtok(NULL, " =");
-            i = atoi(config_token);
-            if(i > 0 && i < 16)
-                config->aster_init_count = i;
-            else
-                fprintf(stderr, "Warning: In config file, 'init-count' must be an integer between 0 and 16.\n");
+            if(config_token)
+            {
+                i = atoi(config_token);
+                if(i > 0 && i < 16)
+                    config->aster_init_count = i;
+                else
+                    fprintf(stderr, "Warning: In config file, 'init-count' must be an integer between 0 and 16.\n");
+            }
         }
         else if(!strcmp(config_token, "max-count"))     /*aster_max_count*/
         {
             /*get second token*/
             config_token = strtok(NULL, " =");
-            i = atoi(config_token);
-            if(i > 0 && i < 256)
-                config->aster_max_count = i;
-            else
-                fprintf(stderr, "Warning: In config file, 'max-count' must be an integer between 0 and 256.\n");
+            if(config_token)
+            {
+                i = atoi(config_token);
+                if(i > 0 && i < 256)
+                    config->aster_max_count = i;
+                else
+                    fprintf(stderr, "Warning: In config file, 'max-count' must be an integer between 0 and 256.\n");
+            }
+        }
+        else if(!strcmp(config_token, "aster-scale"))   /*aster_scale*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                f = (float) atof(config_token);
+                if(f > 0.4999f && f < 2.0001f)
+                    config->aster_scale = f;
+                else
+                    fprintf(stderr, "Warning: In config file, 'aster-scale' must be an number between 0.5 and 2.\n");
+            }
+        }
+        else if(!strcmp(config_token, "aster-massL"))   /*aster_mass_large*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                f = (float) atof(config_token);
+                if(f > 0.0999f && f < 5.0001f)
+                    config->aster_mass_large = f;
+                else
+                    fprintf(stderr, "Warning: In config file, 'aster-massL' must be an number between 0.1 and 5.\n");
+            }
+        }
+        else if(!strcmp(config_token, "aster-massM"))   /*aster_mass_med*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                f = (float) atof(config_token);
+                if(f > 0.0999f && f < 5.0001f)
+                    config->aster_mass_med = f;
+                else
+                    fprintf(stderr, "Warning: In config file, 'aster-massM' must be an number between 0.1 and 5.\n");
+            }
+        }
+        else if(!strcmp(config_token, "aster-massS"))   /*aster_mass_small*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                f = (float) atof(config_token);
+                if(f > 0.0999f && f < 5.0001f)
+                    config->aster_mass_small = f;
+                else
+                    fprintf(stderr, "Warning: In config file, 'aster-massS' must be an number between 0.1 and 5.\n");
+            }
+        }
+        else if(!strcmp(config_token, "fullscreen"))    /*fullscreen*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                if(!strcmp(config_token, "on"))
+                    config->fullscreen = 1;
+                if(!strcmp(config_token, "off"))
+                    config->fullscreen = 0;
+                if(!strcmp(config_token, "desktop"))
+                    config->fullscreen = 2;
+            }
+        }
+        else if(!strcmp(config_token, "win-res"))       /*winres*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                config_token2 = strtok(config_token, "x");
+                if(config_token2)                       /*winres->width*/
+                {
+                    i = atoi(config_token2);
+                    if(i > 0)
+                        config->winres.width = i;
+                    else
+                        fprintf(stderr, "Warning: In config file, 'win-res' invalid width.\n");
+                    config_token2 = strtok(NULL, "x");
+                    if(config_token2)                   /*winres->height*/
+                    {
+                        i = atoi(config_token2);
+                        if(i > 0)
+                            config->winres.height = i;
+                        else
+                            fprintf(stderr, "Warning: In config file, 'win-res' invalid height.\n");
+                    }
+                }
+            }
+        }
+        else if(!strcmp(config_token, "full-res"))       /*fullres*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                config_token2 = strtok(config_token, "x");
+                if(config_token2)                       /*fullres->width*/
+                {
+                    i = atoi(config_token2);
+                    if(i > 0)
+                        config->fullres.width = i;
+                    else
+                        fprintf(stderr, "Warning: In config file, 'full-res' invalid width.\n");
+                    config_token2 = strtok(NULL, "x");
+                    if(config_token2)                   /*fullres->height*/
+                    {
+                        i = atoi(config_token2);
+                        if(i > 0)
+                            config->fullres.height = i;
+                        else
+                            fprintf(stderr, "Warning: In config file, 'full-res' invalid height.\n");
+                    }
+                }
+            }
         }
     }
     fclose(config_file);
