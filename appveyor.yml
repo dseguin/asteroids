@@ -1,0 +1,36 @@
+version: '1.4.0-{build}'
+
+image: Visual Studio 2015
+
+clone_depth: 10
+
+platform:
+  - x86
+  - x64
+
+configuration: Release
+
+build:
+  project: VisualStudio/asteroids.sln
+  verbosity: normal
+
+before_build: nuget restore VisualStudio/asteroids.sln
+
+after_build:
+    - if %PLATFORM%==x86 (cd VisualStudio\Release & del asteroids.iobj & del asteroids.ipdb & del asteroids.pdb & del asteroids.obj & del vc14?.pdb & rmdir /S /Q asteroids.tlog)
+    - if %PLATFORM%==x64 (cd VisualStudio\x64\Release & del asteroids.iobj & del asteroids.ipdb & del asteroids.pdb & del asteroids.obj & del vc14?.pdb & rmdir /S /Q asteroids.tlog)
+
+artifacts:
+    - path: VisualStudio\Release
+      name: asteroids_latest_windows_x86
+      type: zip
+
+    - path: VisualStudio\x64\Release
+      name: asteroids_latest_windows_x64
+      type: zip
+
+notifications:
+  - provider: Email
+    to:
+      - davidseguin@live.ca
+

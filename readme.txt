@@ -9,9 +9,11 @@ Simple Asteroids
 Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.5
 
 Controls:
-  w,a,s,d - Move around
-  space   - Shoot
-  escape  - Quit
+  w,a,s,d    - Move around (player 1)
+  tab        - Shoot (player 1)
+  arrow keys - Move around (player 2)
+  right ctrl - Shoot (player 2)
+  escape     - Quit
 
 Run the program with '-h' for command line options.
 
@@ -19,33 +21,9 @@ Run the program with '-h' for command line options.
 Configuration
 -------------
 The "asteroids.conf" configuration file sits in the same directory
-as the executable. The options are as follows:
-
-  vsync       STATE   - where "STATE" can be on, off, or lateswap
-  physics     STATE   - where "STATE" can be on or off
-  init-count  COUNT   - where "COUNT" can be an integer between 0 and 16
-  max-count   COUNT   - where "COUNT" can be an integer between 0 and 256
-  aster-scale SCALE   - where "SCALE" can be a number between 0.5 and 2
-  aster-massL MASS    - where "MASS" can be a number between 0.1 and 5
-  aster-massM MASS    - where "MASS" can be a number between 0.1 and 5
-  aster-massS MASS    - where "MASS" can be a number between 0.1 and 5
-  fullscreen  STATE   - where "STATE" can be on, off, or desktop
-  full-res    RES     - where "RES" is a WxH screen resolution
-  win-res     RES     - where "RES" is a WxH screen resolution
-
-Example asteroids.conf:
-
-  vsync on
-  physics on
-  init-count 3
-  max-count 8
-  aster-scale 1
-  aster-massL 1
-  aster-massM 1
-  aster-massS 1
-  fullscreen desktop
-  full-res 800x600
-  win-res 800x600
+as the executable. If no such file exists, it will be generated
+using default options. Descriptions of each option can be found in
+the generated config file.
 
 
 Dependencies

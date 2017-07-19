@@ -54,7 +54,7 @@
 #include <time.h>
 
 #define ASTEROIDS_VER_MAJOR 1
-#define ASTEROIDS_VER_MINOR 3
+#define ASTEROIDS_VER_MINOR 4
 #define ASTEROIDS_VER_PATCH 0
 
 #ifndef M_PI
@@ -67,6 +67,7 @@
 #endif
 
 #define CONF_LINE_MAX   128
+#define PLAYER_MAX      2
 #define true            '\x01'
 #define false           '\x00'
 #define ASTER_LARGE     5.f
@@ -120,15 +121,45 @@ typedef struct asteroid {
     GLfloat     bounds_real[6][6]; /*bounding triangles*/
 } asteroid;
 
+/*** projectile object ***/
+typedef struct projectile {
+    float       pos[2];            /*distance from player*/
+    float       real_pos[2];       /*position in relation to player*/
+} projectile;
+
+/*** player object ***
+ *
+ * Each player is a line loop that is treated as a
+ * triangle for simpler collision detection.
+ **/
+typedef struct player {
+    bool        died;
+    bool        blast_reset;       /*false = turn blast effect off*/
+    bool        key_forward;
+    bool        key_backward;
+    bool        key_left;
+    bool        key_right;
+    bool        key_shoot;
+    float       pos[2];            /*x,y*/
+    float       vel[2];            /*x,y*/
+    float       rot;
+    float       bounds[6];         /*bounding triangle A(x,y) B(x,y) C(x,y)*/
+    float       blast_scale;       /*blast effect grows until a certain size*/
+    projectile  shot;
+} player;
+
 /*** resolution options ***/
 typedef struct resolution{
     int         width;
     int         height;
     int         refresh;
 } resolution;
+
 /*** config options ***/
 typedef struct options {
     bool        physics_enabled;   /*enables asteroid collision physics*/
+    bool        friendly_fire;
+    int         player_count;
     int         vsync;             /*1 = enabled, 0 = disabled, -1 = lateswap*/
     int         aster_max_count;   /*maximum number of asteroids that can spawn*/
     int         aster_init_count;  /*number of asteroids that spawn initially*/
@@ -215,12 +246,6 @@ int main                    (int          argc,
 {
     /*** variables ***/
     bool            loop_exit         = false,     /*exit the main window loop?*/
-                    key_pressed_w     = false,
-                    key_pressed_s     = false,
-                    key_pressed_a     = false,
-                    key_pressed_d     = false,
-                    key_pressed_space = false,
-                    player_died       = false,
                     skip_remain_time  = false;     /*on low framerates, skip remaining delta time*/
     Uint32          current_timer     = 0,         /*updated at the start of every loop*/
                     ten_second_timer  = 0,         /*updated every 10000 milliseconds*/
@@ -232,12 +257,16 @@ int main                    (int          argc,
     int             forloop_i         = 0,
                     forloop_j         = 0,
                     forloop_k         = 0,
+                    forloop_l         = 0,
                     a_count           = 8,         /*input asteroid count*/
                     width_real        = 0,         /*actual window width/height*/
-                    height_real       = 0;
+                    height_real       = 0,
+                    players_alive     = 0,
+                    players_blast     = 0;         /*workaround to delay reset*/
     unsigned int    score             = 0,
                     top_score         = 0;
     char            win_title[128]    = {'\0'};
+    char *          argv_token;                    /*pointer to input token*/
     SDL_Window *    win_main;
     SDL_GLContext   win_main_gl;
     SDL_DisplayMode mode_current,
@@ -260,18 +289,21 @@ int main                    (int          argc,
         -0.02f,-0.02f, -0.03f,-0.03f};
     /*all indices in one array*/
     const GLubyte   object_index[]    = {
-        0,1,2,3,                                    /*player*/
-        4,5,                                        /*projectile*/
-        6,7,8,9,10,11,12,13,                        /*asteroid*/
-        14,15,16,17,18,19,20,21,22,23,24,25,26,27}; /*blast*/
+        0,1,2,3,                                     /*player*/
+        4,5,                                         /*projectile*/
+        6,7,8,9,10,11,12,13,                         /*asteroid*/
+        14,15,16,17,18,19,20,21,22,23,24,25,26,27};  /*blast*/
     /*reference asteroid bounding triangles*/
     const GLfloat   aster_bounds[6][6] = {
-        {0.f,0.03f,     0.02f,0.02f,  0.03f,0.f},   /*ABC*/
-        {0.03f,0.f,     0.03f,-0.03f, 0.01f,-0.04f},/*CDE*/
-        {0.01f,-0.04f,  0.f,-0.03f,   0.03f,0.f},   /*EFC*/
-        {0.03f,0.f,     0.f,-0.03f,   0.f,0.03f},   /*CFA*/
-        {0.f,0.03f,     0.f,-0.03f,  -0.02f,-0.03f},/*AFG*/
-        {-0.02f,-0.03f, 0.f,0.03f,   -0.03f,0.f}};  /*GAH*/
+        {0.f,0.03f,     0.02f,0.02f,   0.03f,0.f},   /*ABC*/
+        {0.03f,0.f,     0.03f,-0.03f,  0.01f,-0.04f},/*CDE*/
+        {0.01f,-0.04f,  0.f,-0.03f,    0.03f,0.f},   /*EFC*/
+        {0.03f,0.f,     0.f,-0.03f,    0.f,0.03f},   /*CFA*/
+        {0.f,0.03f,     0.f,-0.03f,   -0.02f,-0.03f},/*AFG*/
+        {-0.02f,-0.03f, 0.f,0.03f,    -0.03f,0.f}};  /*GAH*/
+    /*reference player bounding triangle*/
+    const GLfloat   player_bounds[6] = {
+        0.f,0.04f,      0.04f,-0.04f, -0.04f,-0.04f};
     /*where objects are in object_verts[]*/
     const GLuint    object_vertex_offsets[] = {
         0,                   /*player*/
@@ -288,19 +320,16 @@ int main                    (int          argc,
     GLuint          object_buffers[]       = {0,0};     /*[x,y]*/
     GLfloat         temp_point1[]          = {0.f,0.f}; /*[x,y]*/
     GLfloat         temp_point2[]          = {0.f,0.f}; /*[x,y]*/
-    GLfloat         player_pos[]           = {0.f,0.f}; /*[x,y]*/
-    GLfloat         player_vel[]           = {0.f,0.f}; /*[x,y]*/
-    GLfloat         player_rot             = 0.f;
-    GLfloat         player_bounds[]        = {0.f,0.f,0.f,0.f,0.f,0.f}; /*Ax,Ay,Bx,By,Cx,Cy*/
-    GLfloat         projectile_pos[]       = {0.f,0.f}; /*[x,y]*/
-    GLfloat         projectile_real_pos[]  = {0.f,0.f}; /*[x,y]*/
-    GLfloat         blast_scale            = 1.f;
     GLfloat         left_clip              = -1.f;      /*screen bounds*/
     GLfloat         right_clip             = 1.f;
     GLfloat         top_clip               = 1.f;
     GLfloat         bottom_clip            = -1.f;
-    options         config                 = {true,1,8,3,1.f,1.f,1.f,1.f,0,{800,600,60},{0,0,0}};
-    asteroid*       aster; /*reserve memory for config.aster_max_count asteroids*/
+    /*default config options. See 'typedef struct options'.*/
+    options         config                 = {
+        true, true, 1, 1, 8, 3, 1.f, 1.f,
+        1.f, 1.f, 0, {800,600,60}, {0,0,0}};
+    player*         plyr;
+    asteroid*       aster;
 
     if(!get_config_options(&config))
         fprintf(stderr, "Error reading config file.\n");
@@ -459,6 +488,124 @@ int main                    (int          argc,
                                print_usage();
                                return 1;
                            }
+                /*-M number of players*/
+                case 'M' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -M requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           a_count = atoi(argv[forloop_i+1]);
+                           if(a_count > 0 && a_count <= PLAYER_MAX)
+                               config.player_count = a_count;
+                           else
+                           {
+                               fprintf(stderr, "Number of players must be 1 to %d\n", PLAYER_MAX);
+                               print_usage();
+                               return 1;
+                           }
+                           break;
+                /*-f enable/disable friendly fire*/
+                case 'f' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -f requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           if(!strcmp(argv[forloop_i+1], "on"))
+                               config.friendly_fire = true;
+                           else if(!strcmp(argv[forloop_i+1], "off"))
+                               config.friendly_fire = false;
+                           else
+                           {
+                               fprintf(stderr, "Invalid friendly fire parameter '%s'\n", argv[forloop_i+1]);
+                               print_usage();
+                               return 1;
+                           }
+                           break;
+                /*-F enable/disable fullscreen*/
+                case 'F' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -F requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           if(!strcmp(argv[forloop_i+1], "on"))
+                               config.fullscreen = 1;
+                           else if(!strcmp(argv[forloop_i+1], "off"))
+                               config.fullscreen = 0;
+                           else if(!strcmp(argv[forloop_i+1], "desktop"))
+                               config.fullscreen = 2;
+                           else
+                           {
+                               fprintf(stderr, "Invalid fullscreen parameter '%s'\n", argv[forloop_i+1]);
+                               print_usage();
+                               return 1;
+                           }
+                           break;
+                /*-r? resolution options*/
+                case 'r' : if(argv[forloop_i][2] == 'f')      /*fullres*/
+                           {
+                               if(forloop_i+2 > argc)
+                               {
+                                   fprintf(stderr, "Option -rf requires a specifier\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               else if(argv[forloop_i+1][0] == '-')
+                               {
+                                   fprintf(stderr, "Option -rf invalid parameter '%s'\n", argv[forloop_i+1]);
+                                   print_usage();
+                                   return 1;
+                               }
+                               if((argv_token = strtok(argv[forloop_i+1], "x")) != NULL)
+                               {
+                                   a_count = atoi(argv_token);
+                                   if(a_count > 0)
+                                       config.fullres.width = a_count;
+                               }
+                               if((argv_token = strtok(NULL, "x")) != NULL)
+                               {
+                                   a_count = atoi(argv_token);
+                                   if(a_count > 0)
+                                       config.fullres.height = a_count;
+                               }
+                               break;
+                           }
+                           else if(argv[forloop_i][2] == 'w') /*winres*/
+                           {
+                               if(forloop_i+2 > argc)
+                               {
+                                   fprintf(stderr, "Option -rw requires a specifier\n");
+                                   print_usage();
+                                   return 1;
+                               }
+                               else if(argv[forloop_i+1][0] == '-')
+                               {
+                                   fprintf(stderr, "Option -rw invalid parameter '%s'\n", argv[forloop_i+1]);
+                                   print_usage();
+                                   return 1;
+                               }
+                               if((argv_token = strtok(argv[forloop_i+1], "x")) != NULL)
+                               {
+                                   a_count = atoi(argv_token);
+                                   if(a_count > 0)
+                                       config.winres.width = a_count;
+                               }
+                               if((argv_token = strtok(NULL, "x")) != NULL)
+                               {
+                                   a_count = atoi(argv_token);
+                                   if(a_count > 0)
+                                       config.winres.height = a_count;
+                               }
+                               break;
+                           }
+                           else
+                           {
+                               fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
+                               print_usage();
+                               return 1;
+                           }
                 default  : fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
                            print_usage();
                            return 1;
@@ -466,7 +613,37 @@ int main                    (int          argc,
         }
     }
 
+    /*initialize players*/
+    /*reserve memory for config.player_count players*/
+    plyr = (struct player*) malloc(sizeof(struct player)*config.player_count);
+    players_alive = config.player_count;
+    for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
+    {
+        plyr[forloop_i].died        = false;
+        plyr[forloop_i].blast_reset  = true;
+        plyr[forloop_i].key_forward = false;
+        plyr[forloop_i].key_backward= false;
+        plyr[forloop_i].key_left    = false;
+        plyr[forloop_i].key_right   = false;
+        plyr[forloop_i].key_shoot   = false;
+        plyr[forloop_i].blast_scale = 1.f;
+        /*for now, position only accomodates 2 players*/
+        plyr[forloop_i].pos[0]      = 0.f;
+        plyr[forloop_i].pos[1]      = (float)(config.player_count - 1) *
+                                      ((float)(forloop_i) - 0.5f) * (-1.f);
+        plyr[forloop_i].vel[0]      = 0.f;
+        plyr[forloop_i].vel[1]      = 0.f;
+        plyr[forloop_i].rot         = (float)forloop_i * 180.f;
+        for(forloop_j = 0; forloop_j < 6; forloop_j++)
+            plyr[forloop_i].bounds[forloop_j] = 0.f;
+        plyr[forloop_i].shot.pos[0]      = 0.f;
+        plyr[forloop_i].shot.pos[1]      = 0.f;
+        plyr[forloop_i].shot.real_pos[0] = 0.f;
+        plyr[forloop_i].shot.real_pos[1] = 0.f;
+    }
+
     /*initialize asteroids*/
+    /*reserve memory for config.aster_max_count asteroids*/
     aster = (struct asteroid*) malloc(sizeof(struct asteroid)*config.aster_max_count);
     for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
     {
@@ -485,9 +662,7 @@ int main                    (int          argc,
         for(forloop_j = 0; forloop_j < 6; forloop_j++)
         {
             for(forloop_k = 0; forloop_k < 6; forloop_k++)
-            {
                 aster[forloop_i].bounds_real[forloop_j][forloop_k] = 0.f;
-            }
         }
     }
 
@@ -502,9 +677,20 @@ int main                    (int          argc,
     /*find closest mode*/
     if(config.fullscreen)
     {
-        mode_target.w            = config.fullres.width;
-        mode_target.h            = config.fullres.height;
-        mode_target.refresh_rate = config.fullres.refresh;
+        if(config.fullres.width && config.fullres.height)
+        {
+            mode_target.w            = config.fullres.width;
+            mode_target.h            = config.fullres.height;
+            mode_target.refresh_rate = config.fullres.refresh;
+        }
+        else /*use desktop video mode*/
+        {
+            if(SDL_GetDesktopDisplayMode(0, &mode_target))
+            {
+                fprintf(stderr, "SDL Get Desktop Mode: %s\n", SDL_GetError());
+                SDL_ClearError();
+            }
+        }
     }
     else
     {
@@ -721,137 +907,148 @@ int main                    (int          argc,
             else                                /*high framerate*/
                min_time = frame_time;
 
-            if(!player_died)
+            if(players_alive)
             {
-                /*player*/
-                if(key_pressed_w)
+                /*players*/
+                for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
                 {
-                   player_vel[0] += 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
-                   player_vel[1] += 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
-                }
-                if(key_pressed_s)
-                {
-                   player_vel[0] -= 0.0003f*sin(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
-                   player_vel[1] -= 0.0003f*cos(player_rot*M_PI/180.f)*(min_time/target_time)*(min_time/target_time);
-                }
-                if(player_vel[0] > 0.02f *(min_time/target_time) && min_time > 0.0001f) /*clamp velocity*/
-                   player_vel[0] = 0.02f *(min_time/target_time);
-                if(player_vel[0] < -0.02f*(min_time/target_time) && min_time > 0.0001f)
-                   player_vel[0] = -0.02f*(min_time/target_time);
-                if(player_vel[1] > 0.02f *(min_time/target_time) && min_time > 0.0001f)
-                   player_vel[1] = 0.02f *(min_time/target_time);
-                if(player_vel[1] < -0.02f*(min_time/target_time) && min_time > 0.0001f)
-                   player_vel[1] = -0.02f*(min_time/target_time);
-                player_pos[0] += player_vel[0];
-                player_pos[1] += player_vel[1];
-                if(key_pressed_d)
-                   player_rot += 5.f * (min_time/target_time);
-                if(key_pressed_a)
-                   player_rot -= 5.f * (min_time/target_time);
-                if(player_pos[0] > right_clip) /*screen wrap*/
-                   player_pos[0] = left_clip + 0.01f;
-                if(player_pos[0] < left_clip)
-                   player_pos[0] = right_clip - 0.01f;
-                if(player_pos[1] > top_clip)
-                   player_pos[1] = bottom_clip + 0.01f;
-                if(player_pos[1] < bottom_clip)
-                   player_pos[1] = top_clip -0.01f;
-                if(player_rot > 360.f) /*clamp rotation*/
-                   player_rot = 0.f;
-                if(player_rot < 0.f)
-                   player_rot = 360.f;
-                /*projectile*/
-                if(key_pressed_space && projectile_pos[1] < 0.3f)
-                {
-                    projectile_pos[1]      += 0.02f * (min_time/target_time); /*position for drawing*/
-                    projectile_real_pos[0] += 0.02f * sin(player_rot*M_PI/180.f) * (min_time/target_time); /*for physics*/
-                    projectile_real_pos[1] += 0.02f * cos(player_rot*M_PI/180.f) * (min_time/target_time);
-                }
-                else /*reset projectile position*/
-                {
-                    projectile_pos[1]      = 0.04f;
-                    projectile_real_pos[0] = 0.04f * sin(player_rot*M_PI/180.f);
-                    projectile_real_pos[1] = 0.04f * cos(player_rot*M_PI/180.f);
+                    if(plyr[forloop_i].died) /*skip dead player*/
+                       continue;
+                    if(plyr[forloop_i].key_forward)
+                    {
+                       plyr[forloop_i].vel[0] += 0.0003f*sin(plyr[forloop_i].rot*M_PI/180.f)*
+                                                 (min_time/target_time)*(min_time/target_time);
+                       plyr[forloop_i].vel[1] += 0.0003f*cos(plyr[forloop_i].rot*M_PI/180.f)*
+                                                 (min_time/target_time)*(min_time/target_time);
+                    }
+                    if(plyr[forloop_i].key_backward)
+                    {
+                       plyr[forloop_i].vel[0] -= 0.0003f*sin(plyr[forloop_i].rot*M_PI/180.f)*
+                                                 (min_time/target_time)*(min_time/target_time);
+                       plyr[forloop_i].vel[1] -= 0.0003f*cos(plyr[forloop_i].rot*M_PI/180.f)*
+                                                 (min_time/target_time)*(min_time/target_time);
+                    }
+                    if(plyr[forloop_i].vel[0] > 0.02f *(min_time/target_time) && min_time > 0.0001f) /*clamp velocity*/
+                       plyr[forloop_i].vel[0] = 0.02f *(min_time/target_time);
+                    if(plyr[forloop_i].vel[0] < -0.02f*(min_time/target_time) && min_time > 0.0001f)
+                       plyr[forloop_i].vel[0] = -0.02f*(min_time/target_time);
+                    if(plyr[forloop_i].vel[1] > 0.02f *(min_time/target_time) && min_time > 0.0001f)
+                       plyr[forloop_i].vel[1] = 0.02f *(min_time/target_time);
+                    if(plyr[forloop_i].vel[1] < -0.02f*(min_time/target_time) && min_time > 0.0001f)
+                       plyr[forloop_i].vel[1] = -0.02f*(min_time/target_time);
+                    plyr[forloop_i].pos[0] += plyr[forloop_i].vel[0];
+                    plyr[forloop_i].pos[1] += plyr[forloop_i].vel[1];
+                    if(plyr[forloop_i].key_right)
+                       plyr[forloop_i].rot += 5.f * (min_time/target_time);
+                    if(plyr[forloop_i].key_left)
+                       plyr[forloop_i].rot -= 5.f * (min_time/target_time);
+                    if(plyr[forloop_i].pos[0] > right_clip) /*screen wrap*/
+                       plyr[forloop_i].pos[0] = left_clip + 0.01f;
+                    if(plyr[forloop_i].pos[0] < left_clip)
+                       plyr[forloop_i].pos[0] = right_clip - 0.01f;
+                    if(plyr[forloop_i].pos[1] > top_clip)
+                       plyr[forloop_i].pos[1] = bottom_clip + 0.01f;
+                    if(plyr[forloop_i].pos[1] < bottom_clip)
+                       plyr[forloop_i].pos[1] = top_clip -0.01f;
+                    if(plyr[forloop_i].rot    > 360.f) /*clamp rotation*/
+                       plyr[forloop_i].rot    = 0.f;
+                    if(plyr[forloop_i].rot    < 0.f)
+                       plyr[forloop_i].rot    = 360.f;
+                    /*projectile*/
+                    if(plyr[forloop_i].key_shoot && plyr[forloop_i].shot.pos[1] < 0.3f)
+                    {
+                        plyr[forloop_i].shot.pos[1]      += 0.02f * (min_time/target_time);
+                        plyr[forloop_i].shot.real_pos[0] += 0.02f * sin(plyr[forloop_i].rot*M_PI/180.f) * (min_time/target_time);
+                        plyr[forloop_i].shot.real_pos[1] += 0.02f * cos(plyr[forloop_i].rot*M_PI/180.f) * (min_time/target_time);
+                    }
+                    else /*reset projectile position*/
+                    {
+                        plyr[forloop_i].shot.pos[1]      = 0.04f;
+                        plyr[forloop_i].shot.real_pos[0] = 0.04f * sin(plyr[forloop_i].rot*M_PI/180.f);
+                        plyr[forloop_i].shot.real_pos[1] = 0.04f * cos(plyr[forloop_i].rot*M_PI/180.f);
+                    }
+                    /*player bounding triangle*/
+                    for(forloop_j = 0; forloop_j < 6; forloop_j+=2)
+                    {
+                        temp_point1[0] = player_bounds[forloop_j];
+                        temp_point1[1] = player_bounds[forloop_j+1];
+                        get_real_point_pos(temp_point1, temp_point2, plyr[forloop_i].pos, 1.f, plyr[forloop_i].rot);
+                        /*actual position*/
+                        plyr[forloop_i].bounds[forloop_j]   = temp_point2[0];
+                        plyr[forloop_i].bounds[forloop_j+1] = temp_point2[1];
+                    }
                 }
                 /*asteroids*/
                 for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
                 {
-                    if(aster[forloop_i].is_spawned)
+                    if(!aster[forloop_i].is_spawned) /*skip unspawned asteroid*/
+                        continue;
+                    aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * (min_time/target_time);
+                    aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * (min_time/target_time);
+                    if(aster[forloop_i].pos[0] > right_clip) /*screen wrap*/
+                       aster[forloop_i].pos[0] = left_clip + 0.01f;
+                    if(aster[forloop_i].pos[0] < left_clip)
+                       aster[forloop_i].pos[0] = right_clip - 0.01f;
+                    if(aster[forloop_i].pos[1] > top_clip)
+                       aster[forloop_i].pos[1] = bottom_clip + 0.01f;
+                    if(aster[forloop_i].pos[1] < bottom_clip)
+                       aster[forloop_i].pos[1] = top_clip - 0.01f;
+                    aster[forloop_i].rot += aster[forloop_i].rot_speed * (min_time/target_time);
+                    if(aster[forloop_i].rot > 360.f) /*clamp rotation*/
+                       aster[forloop_i].rot = 0.f;
+                    if(aster[forloop_i].rot < 0.f)
+                       aster[forloop_i].rot = 360.f;
+                    /*asteroid bounding triangles*/
+                    for(forloop_k = 0; forloop_k < 6; forloop_k++)
                     {
-                        aster[forloop_i].pos[0] += aster[forloop_i].vel[0] * (min_time/target_time);
-                        aster[forloop_i].pos[1] += aster[forloop_i].vel[1] * (min_time/target_time);
-                        if(aster[forloop_i].pos[0] > right_clip) /*screen wrap*/
-                           aster[forloop_i].pos[0] = left_clip + 0.01f;
-                        if(aster[forloop_i].pos[0] < left_clip)
-                           aster[forloop_i].pos[0] = right_clip - 0.01f;
-                        if(aster[forloop_i].pos[1] > top_clip)
-                           aster[forloop_i].pos[1] = bottom_clip + 0.01f;
-                        if(aster[forloop_i].pos[1] < bottom_clip)
-                           aster[forloop_i].pos[1] = top_clip - 0.01f;
-                        aster[forloop_i].rot += aster[forloop_i].rot_speed * (min_time/target_time);
-                        if(aster[forloop_i].rot > 360.f) /*clamp rotation*/
-                           aster[forloop_i].rot = 0.f;
-                        if(aster[forloop_i].rot < 0.f)
-                           aster[forloop_i].rot = 360.f;
+                        for(forloop_j = 0; forloop_j < 6; forloop_j+=2)
+                        {
+                            temp_point1[0] = aster_bounds[forloop_k][forloop_j];
+                            temp_point1[1] = aster_bounds[forloop_k][forloop_j+1];
+                            get_real_point_pos(temp_point1,
+                                               temp_point2,
+                                               aster[forloop_i].pos,
+                                               aster[forloop_i].scale,
+                                               aster[forloop_i].rot);
+                            /*actual position*/
+                            aster[forloop_i].bounds_real[forloop_k][forloop_j]   = temp_point2[0];
+                            aster[forloop_i].bounds_real[forloop_k][forloop_j+1] = temp_point2[1];
+                        }
                     }
                 }
-
-                /*player bounding triangle*/
-                temp_point1[0] = 0.f;
-                temp_point1[1] = 0.04f;
-                get_real_point_pos(temp_point1,
-                                   temp_point2,
-                                   player_pos,
-                                   1.f,
-                                   player_rot);
-                /*point A*/
-                player_bounds[0] = temp_point2[0];
-                player_bounds[1] = temp_point2[1];
-
-                temp_point1[0] = 0.04f;
-                temp_point1[1] = -0.04f;
-                get_real_point_pos(temp_point1,
-                                   temp_point2,
-                                   player_pos,
-                                   1.f,
-                                   player_rot);
-                /*point B*/
-                player_bounds[2] = temp_point2[0];
-                player_bounds[3] = temp_point2[1];
-
-                temp_point1[0] = -0.04f;
-                temp_point1[1] = -0.04f;
-                get_real_point_pos(temp_point1,
-                                   temp_point2,
-                                   player_pos,
-                                   1.f,
-                                   player_rot);
-                /*point C*/
-                player_bounds[4] = temp_point2[0];
-                player_bounds[5] = temp_point2[1];
-
-                /*cycle through each asteroid 'k'*/
-                for(forloop_k = 0; forloop_k < config.aster_max_count; forloop_k++)
+                /*cycle through each player 'l'*/
+                for(forloop_l = 0; forloop_l < config.player_count; forloop_l++)
                 {
-                    if(aster[forloop_k].is_spawned)
+                    if(plyr[forloop_l].died) /*skip dead player*/
+                        continue;
+                    /*detect player-player collision*/
+                    for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
                     {
-                        /*asteroid bounding triangles*/
-                        for(forloop_i = 0; forloop_i < 6; forloop_i++)
+                        if(!config.friendly_fire  ||
+                           players_alive < 2      ||
+                           forloop_l == forloop_i ||
+                           plyr[forloop_i].died)
+                            continue;
+                        for(forloop_j = 0; forloop_j < 6; forloop_j+=2)
                         {
-                            for(forloop_j = 0; forloop_j < 6; forloop_j+=2)
+                            /*if player 1 hits player 2 OR player 2 hits player 1*/
+                            if(detect_point_in_triangle(plyr[forloop_l].bounds[forloop_j],
+                                                        plyr[forloop_l].bounds[forloop_j+1],
+                                                        plyr[forloop_i].bounds) ||
+                               detect_point_in_triangle(plyr[forloop_i].bounds[forloop_j],
+                                                        plyr[forloop_i].bounds[forloop_j+1],
+                                                        plyr[forloop_l].bounds))
                             {
-                                temp_point1[0] = aster_bounds[forloop_i][forloop_j];
-                                temp_point1[1] = aster_bounds[forloop_i][forloop_j+1];
-                                get_real_point_pos(temp_point1,
-                                                   temp_point2,
-                                                   aster[forloop_k].pos,
-                                                   aster[forloop_k].scale,
-                                                   aster[forloop_k].rot);
-                                /*actual position*/
-                                aster[forloop_k].bounds_real[forloop_i][forloop_j]   = temp_point2[0];
-                                aster[forloop_k].bounds_real[forloop_i][forloop_j+1] = temp_point2[1];
+                                plyr[forloop_l].died = true;
+                                plyr[forloop_i].died = true;
                             }
                         }
+                    }
+                    /*cycle through each asteroid 'k'*/
+                    for(forloop_k = 0; forloop_k < config.aster_max_count; forloop_k++)
+                    {
+                        if(!aster[forloop_k].is_spawned) /*skip unspawned asteroid*/
+                            continue;
                         /*check asteroid point to player triangle collision*/
                         for(forloop_i = (object_element_count[0] + object_element_count[2]);
                             forloop_i < (object_element_count[0] + object_element_count[2] + object_element_count[4]);
@@ -867,8 +1064,8 @@ int main                    (int          argc,
                             /*detect damage*/
                             if(detect_point_in_triangle(temp_point2[0],
                                                         temp_point2[1],
-                                                        player_bounds))
-                                player_died = true;
+                                                        plyr[forloop_l].bounds))
+                               plyr[forloop_l].died = true;
                         }
                         /*check player point to asteroid triangle collision*/
                         for(forloop_i = 0; forloop_i < 6; forloop_i+=2)
@@ -877,222 +1074,251 @@ int main                    (int          argc,
                             {
                                 /*detect damage*/
                                 if(detect_point_in_triangle(
-                                            player_bounds[forloop_i],
-                                            player_bounds[forloop_i+1],
-                                            aster[forloop_k].bounds_real[forloop_j]))
-                                    player_died = true;
+                                               plyr[forloop_l].bounds[forloop_i],
+                                               plyr[forloop_l].bounds[forloop_i+1],
+                                               aster[forloop_k].bounds_real[forloop_j]))
+                                   plyr[forloop_l].died = true;
                             }
                         }
                         /*check projectile collision*/
-                        if(key_pressed_space)
+                        if(!plyr[forloop_l].key_shoot) /*skip projectile check*/
+                            continue;
+                        get_real_point_pos(plyr[forloop_l].shot.real_pos, temp_point1,
+                                           plyr[forloop_l].pos, 1.f, 0.f);
+                        /*check hit on other player*/
+                        for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
                         {
-                            get_real_point_pos(projectile_real_pos,
-                                               temp_point1,
-                                               player_pos,
-                                               1.f,
-                                               0.f);
-    
-                            for(forloop_i = 0; forloop_i < 6; forloop_i++)
+                            if(!config.friendly_fire  ||
+                               players_alive < 2      ||
+                               forloop_l == forloop_i ||
+                               plyr[forloop_i].died)
+                                continue;
+                            if(!detect_point_in_triangle(temp_point1[0],
+                                                         temp_point1[1],
+                                                         plyr[forloop_i].bounds))
+                                continue; /*skip misses*/
+                            /*reset projectile position*/
+                            plyr[forloop_l].shot.pos[1]      = 0.04f;
+                            plyr[forloop_l].shot.real_pos[0] = 0.04f * sin(plyr[forloop_l].rot*M_PI/180.f);
+                            plyr[forloop_l].shot.real_pos[1] = 0.04f * cos(plyr[forloop_l].rot*M_PI/180.f);
+                            /*other player is hit*/
+                            plyr[forloop_i].died = true;
+                        }
+                        /*check hit on asteroid*/
+                        for(forloop_i = 0; forloop_i < 6; forloop_i++)
+                        {
+                            if(!detect_point_in_triangle(temp_point1[0],
+                                                         temp_point1[1],
+                                                         aster[forloop_k].bounds_real[forloop_i]))
+                                continue; /*skip misses*/
+                            /*reset projectile position*/
+                            plyr[forloop_l].shot.pos[1]      = 0.04f;
+                            plyr[forloop_l].shot.real_pos[0] = 0.04f * sin(plyr[forloop_l].rot*M_PI/180.f);
+                            plyr[forloop_l].shot.real_pos[1] = 0.04f * cos(plyr[forloop_l].rot*M_PI/180.f);
+                            /*score*/
+                            if(aster[forloop_k].scale >
+                                    config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f) /*ASTER_LARGE = 10 points*/
+                               score += 10;
+                            else if(aster[forloop_k].scale <
+                                    config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f) /*ASTER_SMALL = 1 points*/
+                               score += 1;
+                            else                                                    /*ASTER_MED = 5 points*/
+                               score += 5;
+                            /*update scoreboard/window title*/
+                            sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
+                            SDL_SetWindowTitle(win_main,win_title);
+                            /*decide whether to spawn little asteroid*/
+                            if(aster[forloop_k].scale <
+                                    config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f) /*SMALL -> DESPAWN*/
                             {
-                                /* Hit! */
-                                if(detect_point_in_triangle(temp_point1[0],
-                                                            temp_point1[1],
-                                                            aster[forloop_k].bounds_real[forloop_i]))
+                               aster[forloop_k].is_spawned = 0;
+                               aster[forloop_k].collided   = -1;
+                            }
+                            else
+                            {
+                                if(aster[forloop_k].scale  <
+                                        config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f) /*MED -> SMALL*/
                                 {
-                                    /*reset projectile position*/
-                                    projectile_pos[1] = 0.04f;
-                                    projectile_real_pos[0] = 0.04f*sin(player_rot*M_PI/180.f);
-                                    projectile_real_pos[1] = 0.04f*cos(player_rot*M_PI/180.f);
-                                    /*score*/
-                                    if(aster[forloop_k].scale >
-                                       config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f)      /*ASTER_LARGE = 10 points*/
-                                          score += 10;
-                                    else if(aster[forloop_k].scale <
-                                            config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f) /*ASTER_SMALL = 1 points*/
-                                          score += 1;
-                                    else                                                    /*ASTER_MED = 5 points*/
-                                          score += 5;
-                                    /*update scoreboard/window title*/
-                                    sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
-                                    SDL_SetWindowTitle(win_main,win_title);
-                                    /*decide whether to spawn little asteroid*/
-                                    if(aster[forloop_k].scale <
-                                       config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f)      /*SMALL -> DESPAWN*/
+                                   aster[forloop_k].scale  = config.aster_scale      * ASTER_SMALL;
+                                   aster[forloop_k].mass   = config.aster_mass_small * MASS_SMALL;
+                                }
+                                else                                                /*LARGE -> MED*/
+                                {
+                                   aster[forloop_k].scale  = config.aster_scale    * ASTER_MED;
+                                   aster[forloop_k].mass   = config.aster_mass_med * MASS_MED;
+                                }
+                                aster[forloop_k].collided  = -1;
+                                aster[forloop_k].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
+                                aster[forloop_k].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
+                                aster[forloop_k].angle     = (float)(rand()%360);
+                                aster[forloop_k].vel[0]    = aster[forloop_k].vel[0] * sin(aster[forloop_k].angle*M_PI/180.f);
+                                aster[forloop_k].vel[1]    = aster[forloop_k].vel[1] * cos(aster[forloop_k].angle*M_PI/180.f);
+                                aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
+                                /*chance to spawn additional asteroid*/
+                                for(forloop_j = 0; forloop_j < config.aster_max_count; forloop_j++)
+                                {
+                                    if(aster[forloop_j].is_spawned) /*skip already spawned asteroid*/
+                                        continue;
+                                    if(rand() & 0x01) /*50% chance*/
                                     {
-                                       aster[forloop_k].is_spawned = 0;
-                                       aster[forloop_k].collided   = -1;
+                                        aster[forloop_j].is_spawned= 1;
+                                        aster[forloop_j].collided  = -1;
+                                        aster[forloop_j].scale     = config.aster_scale * ASTER_SMALL;
+                                        aster[forloop_j].mass      = config.aster_mass_small * MASS_SMALL;
+                                        aster[forloop_j].rot       = aster[forloop_k].rot;
+                                        aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
+                                        aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
+                                        aster[forloop_j].angle     = (float)(rand()%360);
+                                        aster[forloop_j].vel[0]    = aster[forloop_j].vel[0] * sin(aster[forloop_j].angle*M_PI/180.f);
+                                        aster[forloop_j].vel[1]    = aster[forloop_j].vel[1] * cos(aster[forloop_j].angle*M_PI/180.f);
+                                        aster[forloop_j].pos[0]    = aster[forloop_k].pos[0];
+                                        aster[forloop_j].pos[1]    = aster[forloop_k].pos[1];
+                                        aster[forloop_j].rot_speed = ((float)(rand()%600)-300.f)/100.f;
                                     }
-                                    else
-                                    {
-                                        if(aster[forloop_k].scale  <
-                                           config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f)  /*MED -> SMALL*/
-                                        {
-                                           aster[forloop_k].scale  = config.aster_scale * ASTER_SMALL;
-                                           aster[forloop_k].mass   = config.aster_mass_small * MASS_SMALL;
-                                        }
-                                        else                                                /*LARGE -> MED*/
-                                        {
-                                           aster[forloop_k].scale  = config.aster_scale * ASTER_MED;
-                                           aster[forloop_k].mass   = config.aster_mass_med * MASS_MED;
-                                        }
-                                        aster[forloop_k].collided  = -1;
-                                        aster[forloop_k].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
-                                        aster[forloop_k].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
-                                        aster[forloop_k].angle     = (float)(rand()%360);
-                                        aster[forloop_k].vel[0]    = aster[forloop_k].vel[0] * sin(aster[forloop_k].angle*M_PI/180.f);
-                                        aster[forloop_k].vel[1]    = aster[forloop_k].vel[1] * cos(aster[forloop_k].angle*M_PI/180.f);
-                                        aster[forloop_k].rot_speed = ((float)(rand()%600)-300.f)/100.f;
-                                        /*chance to spawn additional asteroid*/
-                                        for(forloop_j = 0; forloop_j < config.aster_max_count; forloop_j++)
-                                        {
-                                            if(!aster[forloop_j].is_spawned)
-                                            {
-                                                if(rand() & 0x01) /*50% chance*/
-                                                {
-                                                    aster[forloop_j].is_spawned= 1;
-                                                    aster[forloop_j].collided  = -1;
-                                                    aster[forloop_j].scale     = config.aster_scale * ASTER_SMALL;
-                                                    aster[forloop_j].mass      = config.aster_mass_small * MASS_SMALL;
-                                                    aster[forloop_j].rot       = aster[forloop_k].rot;
-                                                    aster[forloop_j].vel[0]    = ((float)(rand()%20)-10.f)/1000.f;
-                                                    aster[forloop_j].vel[1]    = ((float)(rand()%20)-10.f)/1000.f;
-                                                    aster[forloop_j].angle     = (float)(rand()%360);
-                                                    aster[forloop_j].vel[0]    = aster[forloop_j].vel[0] * sin(aster[forloop_j].angle*M_PI/180.f);
-                                                    aster[forloop_j].vel[1]    = aster[forloop_j].vel[1] * cos(aster[forloop_j].angle*M_PI/180.f);
-                                                    aster[forloop_j].pos[0]    = aster[forloop_k].pos[0];
-                                                    aster[forloop_j].pos[1]    = aster[forloop_k].pos[1];
-                                                    aster[forloop_j].rot_speed = ((float)(rand()%600)-300.f)/100.f;
-                                                }
-                                                break;
-                                            }
-                                        }
-                                    }
+                                    break;
                                 }
                             }
-                        } /* check projectile collision */
-                    } /* if(asteroid k is spawned) */
-                } /* for(forloop_k) boundary checking */
+                        }
+                    } /* for(forloop_k) boundary checking */
+                } /*for(forloop_l) cycle through players*/
                 if(config.physics_enabled)
                 {
                     /*check asteroid-asteroid collision*/
                     for(forloop_k = 0; forloop_k < config.aster_max_count; forloop_k++)
                     {
-                        if(aster[forloop_k].is_spawned)
+                        if(!aster[forloop_k].is_spawned) /*skip unspawned asteroid*/
+                            continue;
+                        /*check asteroid against every other asteroid*/
+                        for(forloop_i = forloop_k+1; forloop_i < config.aster_max_count; forloop_i++)
                         {
-                            /*check asteroid against every other asteroid*/
-                            for(forloop_i = forloop_k+1; forloop_i < config.aster_max_count; forloop_i++)
+                            if(!aster[forloop_i].is_spawned) /*skip unspawned asteroid*/
+                                continue;
+                            /*collision*/
+                            if(detect_aster_collision(aster[forloop_k].bounds_real,
+                                        aster[forloop_i].bounds_real))
                             {
-                                if(aster[forloop_i].is_spawned)
+                                if(aster[forloop_k].collided != forloop_i) /*only do collision once*/
                                 {
-                                    /*collision*/
-                                    if(detect_aster_collision(aster[forloop_k].bounds_real,
-                                                              aster[forloop_i].bounds_real))
-                                    {
-                                        if(aster[forloop_k].collided != forloop_i) /*only do collision once*/
-                                        {
-                                            GLfloat velk[2];
-                                            GLfloat veli[2];
-                                            /*'k' collides with 'i', and vice versa*/
-                                            aster[forloop_k].collided = forloop_i;
-                                            aster[forloop_i].collided = forloop_k;
+                                    GLfloat velk[2];
+                                    GLfloat veli[2];
+                                    /*'k' collides with 'i', and vice versa*/
+                                    aster[forloop_k].collided = forloop_i;
+                                    aster[forloop_i].collided = forloop_k;
 
-                                            velk[0] = aster[forloop_k].vel[0];
-                                            velk[1] = aster[forloop_k].vel[1];
-                                            veli[0] = aster[forloop_i].vel[0];
-                                            veli[1] = aster[forloop_i].vel[1];
+                                    velk[0] = aster[forloop_k].vel[0];
+                                    velk[1] = aster[forloop_k].vel[1];
+                                    veli[0] = aster[forloop_i].vel[0];
+                                    veli[1] = aster[forloop_i].vel[1];
 
-                                            /*calculate resulting velocities*/
-                                            /*v1x = (m1-m2)*u1x/(m1+m2) + 2*m2*u2x/(m1+m2)*/
-                                            aster[forloop_k].vel[0] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[0]) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                       (aster[forloop_i].mass * veli[0] * 2) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
+                                    /*calculate resulting velocities*/
+                                    /*v1x = (m1-m2)*u1x/(m1+m2) + 2*m2*u2x/(m1+m2)*/
+                                    aster[forloop_k].vel[0] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[0]) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                        (aster[forloop_i].mass * veli[0] * 2) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass);
 
-                                            /*v1y = (m1-m2)*u1y/(m1+m2) + 2*m2*u2y/(m1+m2)*/
-                                            aster[forloop_k].vel[1] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[1]) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                       (aster[forloop_i].mass * veli[1] * 2) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
+                                    /*v1y = (m1-m2)*u1y/(m1+m2) + 2*m2*u2y/(m1+m2)*/
+                                    aster[forloop_k].vel[1] = ((aster[forloop_k].mass - aster[forloop_i].mass)*velk[1]) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                        (aster[forloop_i].mass * veli[1] * 2) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass);
 
-                                            /*v2x = (m2-m1)*u2x/(m1+m2) + 2*m1*u1x/(m1+m2)*/
-                                            aster[forloop_i].vel[0] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[0]) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                       (aster[forloop_k].mass * velk[0] * 2) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
+                                    /*v2x = (m2-m1)*u2x/(m1+m2) + 2*m1*u1x/(m1+m2)*/
+                                    aster[forloop_i].vel[0] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[0]) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                        (aster[forloop_k].mass * velk[0] * 2) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass);
 
-                                            /*v2 = (m2-m1)*u2/(m1+m2) + 2*m1*u1/(m1+m2)*/
-                                            aster[forloop_i].vel[1] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[1]) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass) +
-                                                                       (aster[forloop_k].mass * velk[1] * 2) /
-                                                                       (aster[forloop_k].mass + aster[forloop_i].mass);
-                                        }
-                                    }
-                                    else if(aster[forloop_k].collided == forloop_i || aster[forloop_i].collided == forloop_k)
-                                    {
-                                        /*'k' and 'i' are no longer colliding*/
-                                        aster[forloop_k].collided = -1;
-                                        aster[forloop_i].collided = -1;
-                                    }
+                                    /*v2 = (m2-m1)*u2/(m1+m2) + 2*m1*u1/(m1+m2)*/
+                                    aster[forloop_i].vel[1] = ((aster[forloop_i].mass - aster[forloop_k].mass)*veli[1]) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass) +
+                                        (aster[forloop_k].mass * velk[1] * 2) /
+                                        (aster[forloop_k].mass + aster[forloop_i].mass);
                                 }
+                            }
+                            else if(aster[forloop_k].collided == forloop_i || aster[forloop_i].collided == forloop_k)
+                            {
+                                /*'k' and 'i' are no longer colliding*/
+                                aster[forloop_k].collided = -1;
+                                aster[forloop_i].collided = -1;
                             }
                         }
                     } /* asteroid-asteroid collision */
                 } /* if(config.physics_enabled) */
-            } /* if(!player_died) */
-            if(player_died)
+            } /* if(players_alive) */
+
+            /*tally players still alive*/
+            players_alive = 0;
+            players_blast = 0;
+            for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
             {
-                blast_scale += 0.2f * (min_time/target_time); /*make blast effect grow*/
-                if(blast_scale > 6.f)                         /*large enough*/
+                if(!plyr[forloop_i].died)
+                    players_alive++;
+                else if(plyr[forloop_i].blast_scale < 6.f && plyr[forloop_i].blast_reset)
+                    plyr[forloop_i].blast_scale += 0.2f * (min_time/target_time); /*make blast effect grow*/
+                else
                 {
-                    blast_scale = 1.f;                        /*reset blast*/
-                    if(score > top_score)                     /*new high score!*/
-                       top_score = score;
-                    score = 0;
-                    /*update scoreboard/window title*/
-                    sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d",
-                            score, top_score);
-                    SDL_SetWindowTitle(win_main,win_title);
-                    /*reset player*/
-                    player_died   = false;
-                    player_pos[0] = 0.f;
-                    player_pos[1] = 0.f;
-                    player_rot    = 0.f;
-                    player_vel[0] = 0.f;
-                    player_vel[1] = 0.f;
-                    /*reset asteroids*/
-                    for(forloop_i = config.aster_init_count; forloop_i < config.aster_max_count; forloop_i++)
+                    plyr[forloop_i].blast_reset = false;
+                    plyr[forloop_i].blast_scale = 0.f;
+                }
+                if(plyr[forloop_i].blast_reset)
+                    players_blast++;
+            }
+            if(!players_alive && !players_blast) /*no players left*/
+            {
+                if(score > top_score) /*new high score!*/
+                   top_score = score;
+                score = 0;
+                /*update scoreboard/window title*/
+                sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
+                SDL_SetWindowTitle(win_main,win_title);
+                /*reset players*/
+                for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
+                {
+                    plyr[forloop_i].died        = false;
+                    plyr[forloop_i].blast_scale = 1.f;
+                    plyr[forloop_i].blast_reset = true;
+                    /*for now, position only accomodates 2 players*/
+                    plyr[forloop_i].pos[0]      = 0.f;
+                    plyr[forloop_i].pos[1]      = (float)(config.player_count - 1) *
+                                                 ((float)(forloop_i) - 0.5f) * (-1.f);
+                    plyr[forloop_i].vel[0]      = 0.f;
+                    plyr[forloop_i].vel[1]      = 0.f;
+                    plyr[forloop_i].rot         = (float)forloop_i * 180.f;
+                }
+                /*reset asteroids*/
+                for(forloop_i = config.aster_init_count; forloop_i < config.aster_max_count; forloop_i++)
+                {
+                    aster[forloop_i].is_spawned = 0;
+                    aster[forloop_i].collided   = -1;
+                }
+                for(forloop_i = 0; forloop_i < config.aster_init_count && forloop_i < config.aster_max_count; forloop_i++)
+                {
+                    aster[forloop_i].is_spawned = 1;
+                    aster[forloop_i].collided   = -1;
+                    if(rand() & 0x01)      /*50%*/
                     {
-                        aster[forloop_i].is_spawned = 0;
-                        aster[forloop_i].collided   = -1;
+                        aster[forloop_i].mass   = config.aster_mass_small * MASS_SMALL;
+                        aster[forloop_i].scale  = config.aster_scale      * ASTER_SMALL;
                     }
-                    for(forloop_i = 0; forloop_i < config.aster_init_count && forloop_i < config.aster_max_count; forloop_i++)
+                    else if(rand() & 0x01) /*25%*/
                     {
-                        aster[forloop_i].is_spawned = 1;
-                        aster[forloop_i].collided   = -1;
-                        if(rand() & 0x01)      /*50%*/
-                        {
-                            aster[forloop_i].mass   = config.aster_mass_small * MASS_SMALL;
-                            aster[forloop_i].scale  = config.aster_scale * ASTER_SMALL;
-                        }
-                        else if(rand() & 0x01) /*25%*/
-                        {
-                            aster[forloop_i].mass   = config.aster_mass_med * MASS_MED;
-                            aster[forloop_i].scale  = config.aster_scale * ASTER_MED;
-                        }
-                        else                   /*25%*/
-                        {
-                            aster[forloop_i].mass   = config.aster_mass_large * MASS_LARGE;
-                            aster[forloop_i].scale  = config.aster_scale * ASTER_LARGE;
-                        }
-                        aster[forloop_i].pos[0]     = left_clip;
-                        aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
-                        aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
-                        aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
-                        aster[forloop_i].angle      = (float)(rand()%360);               /*direction between 0 and 360 degrees*/
-                        aster[forloop_i].vel[0]     = aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f);
-                        aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
-                        aster[forloop_i].rot_speed  = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
+                        aster[forloop_i].mass   = config.aster_mass_med   * MASS_MED;
+                        aster[forloop_i].scale  = config.aster_scale      * ASTER_MED;
                     }
+                    else                   /*25%*/
+                    {
+                        aster[forloop_i].mass   = config.aster_mass_large * MASS_LARGE;
+                        aster[forloop_i].scale  = config.aster_scale      * ASTER_LARGE;
+                    }
+                    aster[forloop_i].pos[0]     = left_clip;
+                    aster[forloop_i].pos[1]     = ((float)(rand()%200)-100.f)/100.f; /*y pos between -1 and 1*/
+                    aster[forloop_i].vel[0]     = ((float)(rand()%20)-10.f)/2000.f;  /*x vel between -0.005 and 0.005*/
+                    aster[forloop_i].vel[1]     = ((float)(rand()%20)-10.f)/2000.f;  /*y vel between -0.005 and 0.005*/
+                    aster[forloop_i].angle      = (float)(rand()%360);               /*direction between 0 and 360 degrees*/
+                    aster[forloop_i].vel[0]     = aster[forloop_i].vel[0] * sin(aster[forloop_i].angle*M_PI/180.f);
+                    aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] * cos(aster[forloop_i].angle*M_PI/180.f);
+                    aster[forloop_i].rot_speed  = ((float)(rand()%400)-200.f)/100.f; /*rotation speed between -2 and 2*/
                 }
             }
             frame_time -= min_time; /*decrement remaining time*/
@@ -1107,34 +1333,54 @@ int main                    (int          argc,
                     loop_exit     = true;
             }
             if(event_main.type == SDL_QUIT)    /*SIGINT/SIGTERM*/
-                loop_exit         = true;
+                    loop_exit     = true;
             if(event_main.type == SDL_KEYDOWN) /*key pressed*/
             {
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                     loop_exit     = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
-                    key_pressed_w = true;
+                    plyr[0].key_forward  = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_S)
-                    key_pressed_s = true;
+                    plyr[0].key_backward = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_A)
-                    key_pressed_a = true;
+                    plyr[0].key_left     = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_D)
-                    key_pressed_d = true;
-                if(event_main.key.keysym.scancode == SDL_SCANCODE_SPACE)
-                    key_pressed_space = true;
+                    plyr[0].key_right    = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
+                    plyr[0].key_shoot    = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_UP)
+                    plyr[1].key_forward  = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_DOWN)
+                    plyr[1].key_backward = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_LEFT)
+                    plyr[1].key_left     = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_RIGHT)
+                    plyr[1].key_right    = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_RCTRL)
+                    plyr[1].key_shoot    = true;
             }
             if(event_main.type == SDL_KEYUP)   /*key released*/
             {
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
-                    key_pressed_w = false;
+                    plyr[0].key_forward  = false;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_S)
-                    key_pressed_s = false;
+                    plyr[0].key_backward = false;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_A)
-                    key_pressed_a = false;
+                    plyr[0].key_left     = false;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_D)
-                    key_pressed_d = false;
-                if(event_main.key.keysym.scancode == SDL_SCANCODE_SPACE)
-                    key_pressed_space = false;
+                    plyr[0].key_right    = false;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
+                    plyr[0].key_shoot    = false;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_UP)
+                    plyr[1].key_forward  = false;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_DOWN)
+                    plyr[1].key_backward = false;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_LEFT)
+                    plyr[1].key_left     = false;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_RIGHT)
+                    plyr[1].key_right    = false;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_RCTRL)
+                    plyr[1].key_shoot    = false;
             }
         }
 
@@ -1163,41 +1409,46 @@ int main                    (int          argc,
                 glPopMatrix();
             }
         }
-        /*player*/
-        glTranslatef(player_pos[0], player_pos[1], 0.f);
-        if(!player_died) /*still alive*/
-        {
-            glRotatef(player_rot, 0.f, 0.f, -1.f);
-            glDrawElements(GL_LINE_LOOP,
-                           object_element_count[1],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[0]);
-            /*projectile*/
-            if(key_pressed_space)
-            {
-                glTranslatef(projectile_pos[0],projectile_pos[1],0.f);
-                glDrawElements(GL_LINES,
-                               object_element_count[3],
-                               GL_UNSIGNED_BYTE,
-                               (void*)(intptr_t)object_index_offsets[1]);
-            }
-        }
-        else /*player death effect*/
+        /*players*/
+        for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
         {
             glPushMatrix();
-            glScalef(blast_scale, blast_scale, 1.f);
-            glDrawElements(GL_LINES,
-                           object_element_count[7],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[3]);
+            glTranslatef(plyr[forloop_i].pos[0], plyr[forloop_i].pos[1], 0.f);
+            if(!plyr[forloop_i].died) /*still alive*/
+            {
+                glRotatef(plyr[forloop_i].rot, 0.f, 0.f, -1.f);
+                glDrawElements(GL_LINE_LOOP,
+                               object_element_count[1],
+                               GL_UNSIGNED_BYTE,
+                               (void*)(intptr_t)object_index_offsets[0]);
+                /*projectile*/
+                if(plyr[forloop_i].key_shoot)
+                {
+                    glTranslatef(plyr[forloop_i].shot.pos[0],plyr[forloop_i].shot.pos[1],0.f);
+                    glDrawElements(GL_LINES,
+                                   object_element_count[3],
+                                   GL_UNSIGNED_BYTE,
+                                   (void*)(intptr_t)object_index_offsets[1]);
+                }
+            }
+            else /*player death effect*/
+            {
+                glPushMatrix();
+                glScalef(plyr[forloop_i].blast_scale, plyr[forloop_i].blast_scale, 1.f);
+                glDrawElements(GL_LINES,
+                               object_element_count[7],
+                               GL_UNSIGNED_BYTE,
+                               (void*)(intptr_t)object_index_offsets[3]);
+                glPopMatrix();
+                /*draw second smaller effect at 90 degree rotation*/
+                glScalef(plyr[forloop_i].blast_scale/2.f, plyr[forloop_i].blast_scale/2.f, 1.f);
+                glRotatef(90.f, 0.f, 0.f, -1.f);
+                glDrawElements(GL_LINES,
+                               object_element_count[7],
+                               GL_UNSIGNED_BYTE,
+                               (void*)(intptr_t)object_index_offsets[3]);
+            }
             glPopMatrix();
-            /*draw second smaller effect at 90 degree rotation*/
-            glScalef(blast_scale/2.f, blast_scale/2.f, 1.f);
-            glRotatef(90.f, 0.f, 0.f, -1.f);
-            glDrawElements(GL_LINES,
-                           object_element_count[7],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[3]);
         }
         /*swap framebuffer*/
         SDL_GL_SwapWindow(win_main);
@@ -1226,10 +1477,14 @@ void print_sdl_version(void)
 
 void print_usage(void)
 {
-    printf("\nUsage: asteroids [-h|-v] [-p|-d] [-s on|off|lateswap] [-b SCALE] [-m<l|m|s> MASS] [-i COUNT] [-n COUNT]\n\n");
+    printf("\nUsage: asteroids [OPTIONS]\n\n");
     printf("        -b  SCALE  Sets asteroid size modifier. 'SCALE' is a number\n");
     printf("                   between 0.5 and 2. The default scale is 1.\n");
     printf("        -d         Disables asteroid collision physics.\n");
+    printf("        -f  STATE  Enables or disables friendly fire. 'STATE' can be\n");
+    printf("                   on or off. The default is on.\n");
+    printf("        -F  STATE  Enables or disables fullscreen mode. 'STATE' can be\n");
+    printf("                   on, off, or desktop. The default is off.\n");
     printf("        -h         Print this help text and exit.\n");
     printf("        -i  COUNT  Sets initial number of asteroids. 'COUNT' is an\n");
     printf("                   integer between 0 and 16. The default count is 3.\n");
@@ -1239,12 +1494,21 @@ void print_usage(void)
     printf("                   between 0.1 and 5. The default mass is 1.\n");
     printf("        -ms MASS   Sets small asteroid mass modifier. 'MASS' is a number\n");
     printf("                   between 0.1 and 5. The default mass is 1.\n");
+    printf("        -M  COUNT  Sets player count. 'COUNT' is an integer from 1 to %d.\n", PLAYER_MAX);
+    printf("                   The default player count is 1.\n");
     printf("        -n  COUNT  Sets maximum asteroid count. 'COUNT' is an integer\n");
     printf("                   between 0 and 256. The default max count is 8.\n");
     printf("        -p         Enables asteroid collision physics. This is the default.\n");
+    printf("        -rf RES    Fullscreen resolution. 'RES' is in the form of WxH.\n");
+    printf("        -rw RES    Windowed resolution. 'RES' is in the form of WxH. The\n");
+    printf("                   default is 800x600.\n");
     printf("        -s  VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
     printf("                   or lateswap. The default is on.\n");
     printf("        -v         Print version info and exit.\n\n");
+    printf("'Simple Asteroids' uses a configuration file called 'asteroids.conf' that\n");
+    printf("sits in the same directory as the program. If 'asteroids.conf' does not exist,\n");
+    printf("it is generated at runtime using the default options. Details about config file\n");
+    printf("options can be found in the generated 'asteroids.conf'.\n\n");
 }
 
 void print_version(void)
@@ -1252,8 +1516,9 @@ void print_version(void)
     SDL_version ver_comp;
     SDL_VERSION(&ver_comp);
 
-    printf("\nSimple Asteroids - version %d.%d.%d\n", ASTEROIDS_VER_MAJOR, ASTEROIDS_VER_MINOR, ASTEROIDS_VER_PATCH);
+    printf("\nSimple Asteroids - version %d.%d.%d\n\n", ASTEROIDS_VER_MAJOR, ASTEROIDS_VER_MINOR, ASTEROIDS_VER_PATCH);
     printf("Copyright (c) 2017 David Seguin <davidseguin@live.ca>\n");
+    printf("License MIT: <https://opensource.org/licenses/MIT>\n");
     printf("Homepage: <https://github.com/dseguin/asteroids>\n");
     printf("Compiled against SDL version %d.%d.%d-%s\n\n", ver_comp.major, ver_comp.minor, ver_comp.patch, SDL_REVISION);
 }
@@ -1333,33 +1598,39 @@ bool get_config_options(options* config)
             perror("fopen write config file");
             return false;
         }
-        fprintf(config_file, "# --- Simple Asteroids configuration file ---\n#\n");
+        fprintf(config_file, "# ### Simple Asteroids configuration file ###\n#\n");
         fprintf(config_file, "# Only valid options are recognized. Everything else is ignored.\n\n");
-        fprintf(config_file, "# VSync option. Can be 'on', 'off', or 'lateswap'. The default is 'on'.\n");
-        fprintf(config_file, "vsync = on\n\n");
-        fprintf(config_file, "# Enables asteroid collision physics. Can be 'on' or 'off'. The default is 'on'.\n");
-        fprintf(config_file, "physics = on\n\n");
-        fprintf(config_file, "# Number of asteroids that spawn initially. Can be between 0 and 16. The default is 3.\n");
-        fprintf(config_file, "init-count = 3\n\n");
-        fprintf(config_file, "# Maximum number of asteroids that can spawn. Can be between 0 and 256. The default is 8.\n");
-        fprintf(config_file, "max-count = 8\n\n");
-        fprintf(config_file, "# Asteroid physical properties\n");
-        fprintf(config_file, "# Asteroid scale modifier. Can be between 0.5 and 2. The default is 1.\n");
-        fprintf(config_file, "aster-scale = 1\n\n");
-        fprintf(config_file, "# Large asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
-        fprintf(config_file, "aster-massL = 1\n\n");
-        fprintf(config_file, "# Medium asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
-        fprintf(config_file, "aster-massM = 1\n\n");
-        fprintf(config_file, "# Small asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
-        fprintf(config_file, "aster-massS = 1\n\n");
-        fprintf(config_file, "# Resolution options\n");
-        fprintf(config_file, "# Enable fullscreen. Can be 'on', 'off', or 'desktop' for native resolution. The default is 'off'.\n");
-        fprintf(config_file, "fullscreen = off\n\n");
-        fprintf(config_file, "# Fullscreen resolution. Read in the form of 'WxH'\n");
-        fprintf(config_file, "#full-res = 800x600\n\n");
-        fprintf(config_file, "# Windowed resolution. Read in the form of 'WxH'. The default is 800x600.\n");
+        fprintf(config_file, "### Resolution options\n");
+        fprintf(config_file, "# fullscreen - Enable fullscreen. Can be 'on', 'off', or 'desktop' for native resolution. The default is 'off'.\n");
+        fprintf(config_file, "# full-res   - Fullscreen resolution. Read in the form of 'WxH'\n");
+        fprintf(config_file, "# win-res    - Windowed resolution. Read in the form of 'WxH'. The default is 800x600.\n");
+        fprintf(config_file, "# vsync      - VSync option. Can be 'on', 'off', or 'lateswap'. The default is 'on'.\n");
+        fprintf(config_file, "fullscreen = off\n");
+        fprintf(config_file, "#full-res = 800x600\n");
         fprintf(config_file, "win-res = 800x600\n");
+        fprintf(config_file, "vsync = on\n\n");
+        fprintf(config_file, "### Multiplayer\n");
+        fprintf(config_file, "# players       - Number of players. Can be from 1 to %d\n", PLAYER_MAX);
+        fprintf(config_file, "# friendly-fire - Enables players to damage each other\n");
+        fprintf(config_file, "players = 1\n");
+        fprintf(config_file, "friendly-fire = on\n\n");
+        fprintf(config_file, "### Asteroid properties\n");
+        fprintf(config_file, "# physics     - Enables asteroid collision physics. Can be 'on' or 'off'. The default is 'on'.\n");
+        fprintf(config_file, "# init-count  - Number of asteroids that spawn initially. Can be between 0 and 16. The default is 3.\n");
+        fprintf(config_file, "# max-count   - Maximum number of asteroids that can spawn. Can be between 0 and 256. The default is 8.\n");
+        fprintf(config_file, "# aster-scale - Asteroid scale modifier. Can be between 0.5 and 2. The default is 1.\n");
+        fprintf(config_file, "# aster-massL - Large asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
+        fprintf(config_file, "# aster-massM - Medium asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
+        fprintf(config_file, "# aster-massS - Small asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
+        fprintf(config_file, "physics = on\n");
+        fprintf(config_file, "init-count = 3\n");
+        fprintf(config_file, "max-count = 8\n");
+        fprintf(config_file, "aster-scale = 1\n");
+        fprintf(config_file, "aster-massL = 1\n");
+        fprintf(config_file, "aster-massM = 1\n");
+        fprintf(config_file, "aster-massS = 1\n");
         fclose(config_file);
+        fprintf(stderr, "Successfully generated config file 'asteroids.conf'. See comments in file for details.\n");
         return true;
     }
     /*read existing config*/
@@ -1519,7 +1790,7 @@ bool get_config_options(options* config)
                 }
             }
         }
-        else if(!strcmp(config_token, "full-res"))       /*fullres*/
+        else if(!strcmp(config_token, "full-res"))      /*fullres*/
         {
             /*get second token*/
             config_token = strtok(NULL, " =");
@@ -1543,6 +1814,31 @@ bool get_config_options(options* config)
                             fprintf(stderr, "Warning: In config file, 'full-res' invalid height.\n");
                     }
                 }
+            }
+        }
+        else if(!strcmp(config_token, "players"))       /*players*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                i = atoi(config_token);
+                if(i > 0 && i <= PLAYER_MAX)
+                    config->player_count = i;
+                else
+                    fprintf(stderr, "Warning: In config file, 'players' must be a number from 1 to %d.\n", PLAYER_MAX);
+            }
+        }
+        else if(!strcmp(config_token, "friendly-fire")) /*friendly_fire*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                if(!strcmp(config_token, "on"))
+                    config->friendly_fire = true;
+                if(!strcmp(config_token, "off"))
+                    config->friendly_fire = false;
             }
         }
     }
