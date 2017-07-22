@@ -2,13 +2,18 @@
 Simple Asteroids
 ================
   Version 1
-  https://github.com/dseguin/asteroids
+  https://dseguin.github.io/asteroids/
   Copyright (c) 2017 David Seguin <davidseguin@live.ca>
   MIT License (see asteroids.c for license text)
 
 Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.5
 
-Controls:
+Controls (1 player):
+  w,a,s,d    - Move around
+  space      - Shoot
+  escape     - Quit
+
+Controls (2 players):
   w,a,s,d    - Move around (player 1)
   tab        - Shoot (player 1)
   arrow keys - Move around (player 2)

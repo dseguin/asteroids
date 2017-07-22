@@ -4,7 +4,7 @@
  *
  * Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.5
  *
- * https://github.com/dseguin/asteroids
+ * https://dseguin.github.io/asteroids/
  * Copyright (c) 2017 David Seguin <davidseguin@live.ca>
  *
  * Permission is hereby granted, free of charge, to any person obtaining
@@ -55,7 +55,7 @@
 
 #define ASTEROIDS_VER_MAJOR 1
 #define ASTEROIDS_VER_MINOR 4
-#define ASTEROIDS_VER_PATCH 0
+#define ASTEROIDS_VER_PATCH 1
 
 #ifndef M_PI
   #ifdef M_PIl
@@ -140,6 +140,8 @@ typedef struct player {
     bool        key_left;
     bool        key_right;
     bool        key_shoot;
+    unsigned int score;
+    unsigned int top_score;
     float       pos[2];            /*x,y*/
     float       vel[2];            /*x,y*/
     float       rot;
@@ -263,9 +265,7 @@ int main                    (int          argc,
                     height_real       = 0,
                     players_alive     = 0,
                     players_blast     = 0;         /*workaround to delay reset*/
-    unsigned int    score             = 0,
-                    top_score         = 0;
-    char            win_title[128]    = {'\0'};
+    char            win_title[256]    = {'\0'};
     char *          argv_token;                    /*pointer to input token*/
     SDL_Window *    win_main;
     SDL_GLContext   win_main_gl;
@@ -626,6 +626,8 @@ int main                    (int          argc,
         plyr[forloop_i].key_left    = false;
         plyr[forloop_i].key_right   = false;
         plyr[forloop_i].key_shoot   = false;
+        plyr[forloop_i].score       = 0;
+        plyr[forloop_i].top_score   = 0;
         plyr[forloop_i].blast_scale = 1.f;
         /*for now, position only accomodates 2 players*/
         plyr[forloop_i].pos[0]      = 0.f;
@@ -691,18 +693,21 @@ int main                    (int          argc,
                 SDL_ClearError();
             }
         }
+        if(!(SDL_GetClosestDisplayMode(0, &mode_target, &mode_current)))
+        {
+            fprintf(stderr, "SDL Get Display Mode: %s\n", SDL_GetError());
+            SDL_ClearError();
+            mode_current = mode_default;
+        }
     }
     else
     {
-        mode_target.w            = config.winres.width;
-        mode_target.h            = config.winres.height;
-        mode_target.refresh_rate = config.winres.refresh;
-    }
-    if(!(SDL_GetClosestDisplayMode(0, &mode_target, &mode_current)))
-    {
-        fprintf(stderr, "SDL Get Display Mode: %s\n", SDL_GetError());
-        SDL_ClearError();
-        mode_current = mode_default;
+        mode_target.w             = config.winres.width;
+        mode_target.h             = config.winres.height;
+        mode_target.refresh_rate  = config.winres.refresh;
+        mode_current.w            = config.winres.width;
+        mode_current.h            = config.winres.height;
+        mode_current.refresh_rate = config.winres.refresh;
     }
 
     /*create window*/
@@ -1117,15 +1122,20 @@ int main                    (int          argc,
                             plyr[forloop_l].shot.real_pos[1] = 0.04f * cos(plyr[forloop_l].rot*M_PI/180.f);
                             /*score*/
                             if(aster[forloop_k].scale >
-                                    config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f) /*ASTER_LARGE = 10 points*/
-                               score += 10;
+                                    config.aster_scale*(ASTER_LARGE+ASTER_MED)/2.f) /*ASTER_LARGE = 1 points*/
+                               plyr[forloop_l].score += 1;
                             else if(aster[forloop_k].scale <
-                                    config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f) /*ASTER_SMALL = 1 points*/
-                               score += 1;
+                                    config.aster_scale*(ASTER_MED+ASTER_SMALL)/2.f) /*ASTER_SMALL = 10 points*/
+                               plyr[forloop_l].score += 10;
                             else                                                    /*ASTER_MED = 5 points*/
-                               score += 5;
+                               plyr[forloop_l].score += 5;
                             /*update scoreboard/window title*/
-                            sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
+                            if(config.player_count == 1) /*1 player*/
+                                sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d",
+                                        plyr[0].score, plyr[0].top_score);
+                            else                         /*2 players*/
+                                sprintf(win_title, "Simple Asteroids - PLAYER1 Score: %d  Top Score: %d    /    PLAYER2 Score: %d  Top Score: %d",
+                                        plyr[0].score, plyr[0].top_score, plyr[1].score, plyr[1].top_score);
                             SDL_SetWindowTitle(win_main,win_title);
                             /*decide whether to spawn little asteroid*/
                             if(aster[forloop_k].scale <
@@ -1266,11 +1276,19 @@ int main                    (int          argc,
             }
             if(!players_alive && !players_blast) /*no players left*/
             {
-                if(score > top_score) /*new high score!*/
-                   top_score = score;
-                score = 0;
+                for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
+                {
+                    if(plyr[forloop_i].score > plyr[forloop_i].top_score) /*new high score!*/
+                       plyr[forloop_i].top_score = plyr[forloop_i].score;
+                    plyr[forloop_i].score = 0;
+                }
                 /*update scoreboard/window title*/
-                sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d", score, top_score);
+                if(config.player_count == 1) /*1 player*/
+                   sprintf(win_title, "Simple Asteroids - Score: %d - Top Score: %d",
+                           plyr[0].score, plyr[0].top_score);
+                else                         /*2 players*/
+                   sprintf(win_title, "Simple Asteroids - PLAYER1 Score: %d  Top Score: %d / PLAYER2 Score: %d  Top Score: %d",
+                           plyr[0].score, plyr[0].top_score, plyr[1].score, plyr[1].top_score);
                 SDL_SetWindowTitle(win_main,win_title);
                 /*reset players*/
                 for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
@@ -1346,7 +1364,9 @@ int main                    (int          argc,
                     plyr[0].key_left     = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_D)
                     plyr[0].key_right    = true;
-                if(event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
+                if(config.player_count == 1 && event_main.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                    plyr[0].key_shoot    = true;
+                if(config.player_count > 1 && event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
                     plyr[0].key_shoot    = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_UP)
                     plyr[1].key_forward  = true;
@@ -1369,7 +1389,9 @@ int main                    (int          argc,
                     plyr[0].key_left     = false;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_D)
                     plyr[0].key_right    = false;
-                if(event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
+                if(config.player_count == 1 && event_main.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                    plyr[0].key_shoot    = false;
+                if(config.player_count > 1 && event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
                     plyr[0].key_shoot    = false;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_UP)
                     plyr[1].key_forward  = false;
@@ -1519,14 +1541,14 @@ void print_version(void)
     printf("\nSimple Asteroids - version %d.%d.%d\n\n", ASTEROIDS_VER_MAJOR, ASTEROIDS_VER_MINOR, ASTEROIDS_VER_PATCH);
     printf("Copyright (c) 2017 David Seguin <davidseguin@live.ca>\n");
     printf("License MIT: <https://opensource.org/licenses/MIT>\n");
-    printf("Homepage: <https://github.com/dseguin/asteroids>\n");
+    printf("Homepage: <https://dseguin.github.io/asteroids/>\n");
     printf("Compiled against SDL version %d.%d.%d-%s\n\n", ver_comp.major, ver_comp.minor, ver_comp.patch, SDL_REVISION);
 }
 
 bool get_config_options(options* config)
 {
-    int        i     = 0;
-    float      f     = 0.f;
+    int        i = 0;
+    float      f = 0.f;
     const char config_name[] = "asteroids.conf";
     char       bin_path[FILENAME_MAX];
     char       config_line[CONF_LINE_MAX]; /*full line from config file*/
