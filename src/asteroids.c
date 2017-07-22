@@ -265,7 +265,11 @@ int main                    (int          argc,
                     height_real       = 0,
                     players_alive     = 0,
                     players_blast     = 0;         /*workaround to delay reset*/
-    char            win_title[256]    = {'\0'};
+    char            win_title[256]    = {'\0'},
+                    p1_score[32]      = {'\0'},
+                    p1_topscore[32]   = {'\0'},
+                    p2_score[32]      = {'\0'},
+                    p2_topscore[32]   = {'\0'};
     char *          argv_token;                    /*pointer to input token*/
     SDL_Window *    win_main;
     SDL_GLContext   win_main_gl;
@@ -286,13 +290,53 @@ int main                    (int          argc,
         -0.01f,0.f,    -0.02f,0.f,   -0.01f,0.02f,  -0.02f,0.04f,
         0.01f,0.01f,    0.02f,0.02f,  0.02f,0.f,     0.03f,0.f,
         0.01f,-0.02f,   0.02f,-0.04f, 0.f,-0.01f,    0.f,-0.02f,
-        -0.02f,-0.02f, -0.03f,-0.03f};
+        -0.02f,-0.02f, -0.03f,-0.03f,
+        /*alpha-numeric*/
+        0.f,0.f,        0.02f,0.f,    0.04f,0.f,     0.04f,-0.02f,
+        0.f,-0.04f,     0.02f,-0.04f, 0.04f,-0.04f,  0.04f,-0.06f,
+        0.f,-0.08f,     0.02f,-0.08f, 0.04f,-0.08f};
     /*all indices in one array*/
     const GLubyte   object_index[]    = {
         0,1,2,3,                                     /*player*/
         4,5,                                         /*projectile*/
         6,7,8,9,10,11,12,13,                         /*asteroid*/
-        14,15,16,17,18,19,20,21,22,23,24,25,26,27};  /*blast*/
+        14,15,16,17,18,19,20,21,22,23,24,25,26,27,   /*blast*/
+        30,38,36,28,30,36,                           /*0*/
+        30,38,                                       /*1*/
+        28,30,34,32,36,38,                           /*2*/
+        28,30,34,32,34,38,36,                        /*3*/
+        28,32,34,30,38,                              /*4*/
+        30,28,32,34,38,36,                           /*5*/
+        30,28,36,38,34,32,                           /*6*/
+        28,30,38,                                    /*7*/
+        32,34,38,36,28,30,34,                        /*8*/
+        38,30,28,32,34,                              /*9*/
+        36,28,30,38,34,32,                           /*A*/
+        36,28,31,32,35,36,                           /*B*/
+        30,28,36,38,                                 /*C*/
+        36,28,31,35,36,                              /*D*/
+        30,28,32,34,32,36,38,                        /*E*/
+        30,28,32,34,32,36,                           /*F*/
+        30,28,36,38,34,33,                           /*G*/
+        28,36,32,34,38,30,                           /*H*/
+        28,30,29,37,36,38,                           /*I*/
+        28,30,29,37,36,                              /*J*/
+        28,36,32,30,32,38,                           /*K*/
+        28,36,38,                                    /*L*/
+        36,28,33,30,38,                              /*M*/
+        36,28,38,30,                                 /*N*/
+        28,30,38,36,28,                              /*O*/
+        36,28,30,34,32,                              /*P*/
+        38,36,28,30,38,33,                           /*Q*/
+        36,28,34,32,38,                              /*R*/
+        30,28,32,34,38,36,                           /*S*/
+        28,30,29,37,                                 /*T*/
+        28,36,38,30,                                 /*U*/
+        28,37,30,                                    /*V*/
+        28,36,33,38,30,                              /*W*/
+        28,38,33,30,36,                              /*X*/
+        28,33,30,33,37,                              /*Y*/
+        28,30,36,38};                                /*Z*/
     /*reference asteroid bounding triangles*/
     const GLfloat   aster_bounds[6][6] = {
         {0.f,0.03f,     0.02f,0.02f,   0.03f,0.f},   /*ABC*/
@@ -309,15 +353,59 @@ int main                    (int          argc,
         0,                   /*player*/
         sizeof(GLfloat)*8,   /*projectile*/
         sizeof(GLfloat)*12,  /*asteroid*/
-        sizeof(GLfloat)*28}; /*blast*/
+        sizeof(GLfloat)*28,  /*blast*/
+        sizeof(GLfloat)*56}; /*alpha-numeric*/
     /*where indices are in object_index[]*/
     const GLuint    object_index_offsets[] = {
         0,                   /*player*/
         sizeof(GLubyte)*4,   /*projectile*/
         sizeof(GLubyte)*6,   /*asteroid*/
-        sizeof(GLubyte)*14}; /*blast*/
-    const GLubyte   object_element_count[] = {8,4, 4,2, 16,8, 28,14}; /*(vertex,index)*/
-    GLuint          object_buffers[]       = {0,0};     /*[x,y]*/
+        sizeof(GLubyte)*14,  /*blast*/
+        sizeof(GLubyte)*28,  /*0*/
+        sizeof(GLubyte)*34,  /*1*/
+        sizeof(GLubyte)*36,  /*2*/
+        sizeof(GLubyte)*42,  /*3*/
+        sizeof(GLubyte)*49,  /*4*/
+        sizeof(GLubyte)*54,  /*5*/
+        sizeof(GLubyte)*60,  /*6*/
+        sizeof(GLubyte)*66,  /*7*/
+        sizeof(GLubyte)*69,  /*8*/
+        sizeof(GLubyte)*76,  /*9*/
+        sizeof(GLubyte)*81,  /*A*/
+        sizeof(GLubyte)*87,  /*B*/
+        sizeof(GLubyte)*93,  /*C*/
+        sizeof(GLubyte)*97,  /*D*/
+        sizeof(GLubyte)*102, /*E*/
+        sizeof(GLubyte)*109, /*F*/
+        sizeof(GLubyte)*115, /*G*/
+        sizeof(GLubyte)*121, /*H*/
+        sizeof(GLubyte)*127, /*I*/
+        sizeof(GLubyte)*133, /*J*/
+        sizeof(GLubyte)*138, /*K*/
+        sizeof(GLubyte)*144, /*L*/
+        sizeof(GLubyte)*147, /*M*/
+        sizeof(GLubyte)*152, /*N*/
+        sizeof(GLubyte)*156, /*O*/
+        sizeof(GLubyte)*161, /*P*/
+        sizeof(GLubyte)*166, /*Q*/
+        sizeof(GLubyte)*172, /*R*/
+        sizeof(GLubyte)*177, /*S*/
+        sizeof(GLubyte)*183, /*T*/
+        sizeof(GLubyte)*187, /*U*/
+        sizeof(GLubyte)*191, /*V*/
+        sizeof(GLubyte)*194, /*W*/
+        sizeof(GLubyte)*199, /*X*/
+        sizeof(GLubyte)*204, /*Y*/
+        sizeof(GLubyte)*209};/*Z*/
+    const GLubyte   object_element_count[] = {8,4,  4,2,  16,8, 28,14,22,6,
+                                              22,2, 22,6, 22,7, 22,5, 22,6,
+                                              22,6, 22,3, 22,7, 22,5, 22,6,
+                                              22,6, 22,4, 22,5, 22,7, 22,6,
+                                              22,6, 22,6, 22,6, 22,5, 22,6,
+                                              22,3, 22,5, 22,4, 22,5, 22,5,
+                                              22,6, 22,5, 22,6, 22,4, 22,4,
+                                              22,3, 22,5, 22,5, 22,5, 22,4}; /*(vertex,index)*/
+    GLuint          object_buffers[]       = {0,0};
     GLfloat         temp_point1[]          = {0.f,0.f}; /*[x,y]*/
     GLfloat         temp_point2[]          = {0.f,0.f}; /*[x,y]*/
     GLfloat         left_clip              = -1.f;      /*screen bounds*/
@@ -856,7 +944,7 @@ int main                    (int          argc,
            frame_time = 250.f;
         prev_timer = current_timer;
 
-        if(current_timer - ten_second_timer > 10000) /*every 10 seconds*/
+        if(current_timer - ten_second_timer > 5000) /*every 5 seconds*/
         {
             ten_second_timer = current_timer;
             /*spawn new asteroid*/
@@ -1469,6 +1557,110 @@ int main                    (int          argc,
                                object_element_count[7],
                                GL_UNSIGNED_BYTE,
                                (void*)(intptr_t)object_index_offsets[3]);
+            }
+            glPopMatrix();
+        }
+        /*score*/
+        sprintf(p1_score,    "SCORE     %d", plyr[0].score);
+        sprintf(p1_topscore, "HI SCORE  %d", plyr[0].top_score);
+        glPushMatrix(); /*P1 SCORE*/
+        glTranslatef(left_clip + 0.02f, top_clip - 0.02f, 0.f);
+        glScalef(0.5f, 0.5f, 0.f);
+        for(forloop_i = 0; (unsigned)forloop_i < sizeof(p1_score); forloop_i++)
+        {
+            int tmp_char = 0;
+            if(p1_score[forloop_i] != ' ')
+            {
+                if(p1_score[forloop_i] == '\0')
+                    break;
+                else if(p1_score[forloop_i] > 0x2F && p1_score[forloop_i] < 0x3A)
+                    tmp_char = p1_score[forloop_i] - 0x2B;
+                else if(p1_score[forloop_i] > 0x40 && p1_score[forloop_i] < 0x5B)
+                    tmp_char = p1_score[forloop_i] - 0x32;
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                               object_element_count[(tmp_char*2)-1],
+                               GL_UNSIGNED_BYTE,
+                               (void*)(intptr_t)object_index_offsets[tmp_char - 1]);
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
+        glPushMatrix(); /*P1 HI SCORE*/
+        glTranslatef(left_clip + 0.02f, top_clip - 0.08f, 0.f);
+        glScalef(0.5f, 0.5f, 0.f);
+        for(forloop_i = 0; (unsigned)forloop_i < sizeof(p1_topscore); forloop_i++)
+        {
+            int tmp_char = 0;
+            if(p1_topscore[forloop_i] != ' ')
+            {
+                if(p1_topscore[forloop_i] == '\0')
+                    break;
+                else if(p1_topscore[forloop_i] > 0x2F && p1_topscore[forloop_i] < 0x3A)
+                    tmp_char = p1_topscore[forloop_i] - 0x2B;
+                else if(p1_topscore[forloop_i] > 0x40 && p1_topscore[forloop_i] < 0x5B)
+                    tmp_char = p1_topscore[forloop_i] - 0x32;
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                               object_element_count[(tmp_char*2)-1],
+                               GL_UNSIGNED_BYTE,
+                               (void*)(intptr_t)object_index_offsets[tmp_char - 1]);
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
+        if(config.player_count > 1)
+        {
+            sprintf(p2_score,    "SCORE     %d", plyr[1].score);
+            sprintf(p2_topscore, "HI SCORE  %d", plyr[1].top_score);
+            glPushMatrix(); /*P2 SCORE*/
+            glTranslatef(right_clip - 7.f*0.06f - 0.02f, top_clip - 0.02f, 0.f);
+            glScalef(0.5f, 0.5f, 0.f);
+            for(forloop_i = 0; (unsigned)forloop_i < sizeof(p2_score); forloop_i++)
+            {
+                int tmp_char = 0;
+                if(p2_score[forloop_i] != ' ')
+                {
+                    if(p2_score[forloop_i] == '\0')
+                        break;
+                    else if(p2_score[forloop_i] > 0x2F && p2_score[forloop_i] < 0x3A)
+                        tmp_char = p2_score[forloop_i] - 0x2B;
+                    else if(p2_score[forloop_i] > 0x40 && p2_score[forloop_i] < 0x5B)
+                        tmp_char = p2_score[forloop_i] - 0x32;
+                    else
+                        break;
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char - 1]);
+                }
+                glTranslatef(0.06f, 0.f, 0.f);
+            }
+            glPopMatrix();
+            glPushMatrix(); /*P2 HI SCORE*/
+            glTranslatef(right_clip - 7.f*0.06f - 0.02f, top_clip - 0.08f, 0.f);
+            glScalef(0.5f, 0.5f, 0.f);
+            for(forloop_i = 0; (unsigned)forloop_i < sizeof(p2_topscore); forloop_i++)
+            {
+                int tmp_char = 0;
+                if(p2_topscore[forloop_i] != ' ')
+                {
+                    if(p2_topscore[forloop_i] == '\0')
+                        break;
+                    else if(p2_topscore[forloop_i] > 0x2F && p2_topscore[forloop_i] < 0x3A)
+                        tmp_char = p2_topscore[forloop_i] - 0x2B;
+                    else if(p2_topscore[forloop_i] > 0x40 && p2_topscore[forloop_i] < 0x5B)
+                        tmp_char = p2_topscore[forloop_i] - 0x32;
+                    else
+                        break;
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char - 1]);
+                }
+                glTranslatef(0.06f, 0.f, 0.f);
             }
             glPopMatrix();
         }
