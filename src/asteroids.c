@@ -328,7 +328,7 @@ int main                    (int          argc,
         28,30,38,36,28,                              /*O*/
         36,28,30,34,32,                              /*P*/
         38,36,28,30,38,33,                           /*Q*/
-        36,28,34,32,38,                              /*R*/
+        36,28,30,34,32,38,                           /*R*/
         30,28,32,34,38,36,                           /*S*/
         28,30,29,37,                                 /*T*/
         28,36,38,30,                                 /*U*/
@@ -389,21 +389,21 @@ int main                    (int          argc,
         sizeof(GLubyte)*161, /*P*/
         sizeof(GLubyte)*166, /*Q*/
         sizeof(GLubyte)*172, /*R*/
-        sizeof(GLubyte)*177, /*S*/
-        sizeof(GLubyte)*183, /*T*/
-        sizeof(GLubyte)*187, /*U*/
-        sizeof(GLubyte)*191, /*V*/
-        sizeof(GLubyte)*194, /*W*/
-        sizeof(GLubyte)*199, /*X*/
-        sizeof(GLubyte)*204, /*Y*/
-        sizeof(GLubyte)*209};/*Z*/
+        sizeof(GLubyte)*178, /*S*/
+        sizeof(GLubyte)*184, /*T*/
+        sizeof(GLubyte)*188, /*U*/
+        sizeof(GLubyte)*192, /*V*/
+        sizeof(GLubyte)*195, /*W*/
+        sizeof(GLubyte)*200, /*X*/
+        sizeof(GLubyte)*205, /*Y*/
+        sizeof(GLubyte)*210};/*Z*/
     const GLubyte   object_element_count[] = {8,4,  4,2,  16,8, 28,14,22,6,
                                               22,2, 22,6, 22,7, 22,5, 22,6,
                                               22,6, 22,3, 22,7, 22,5, 22,6,
                                               22,6, 22,4, 22,5, 22,7, 22,6,
                                               22,6, 22,6, 22,6, 22,5, 22,6,
                                               22,3, 22,5, 22,4, 22,5, 22,5,
-                                              22,6, 22,5, 22,6, 22,4, 22,4,
+                                              22,6, 22,6, 22,6, 22,4, 22,4,
                                               22,3, 22,5, 22,5, 22,5, 22,4}; /*(vertex,index)*/
     GLuint          object_buffers[]       = {0,0};
     GLfloat         temp_point1[]          = {0.f,0.f}; /*[x,y]*/

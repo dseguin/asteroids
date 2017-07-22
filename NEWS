@@ -1,3 +1,9 @@
+2017-07-22 - Version 1.4.1 ***
+
+* Now tracking each player's score individually
+* Added ingame score board
+* Fixed windowed resolution only using some resolutions
+
 2017-07-19 - Version 1.4.0 ***
 
 * Added multiplayer support
