@@ -1,3 +1,9 @@
+2017-07-24 - Version 1.4.2 ***
+
+* (sort of) Implemented support for OSX and FreeBSD
+* Added "pause" feature
+* Fixed windowed mode not respecting user set resolution
+
 2017-07-22 - Version 1.4.1 ***
 
 * Now tracking each player's score individually

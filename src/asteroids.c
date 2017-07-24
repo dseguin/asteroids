@@ -62,7 +62,7 @@
 
 #define ASTEROIDS_VER_MAJOR 1
 #define ASTEROIDS_VER_MINOR 4
-#define ASTEROIDS_VER_PATCH 1
+#define ASTEROIDS_VER_PATCH 2
 
 #ifndef M_PI
   #ifdef M_PIl
