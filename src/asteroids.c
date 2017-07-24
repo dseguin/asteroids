@@ -255,6 +255,7 @@ int main                    (int          argc,
 {
     /*** variables ***/
     bool            loop_exit         = false,     /*exit the main window loop?*/
+                    paused            = false,
                     skip_remain_time  = false;     /*on low framerates, skip remaining delta time*/
     Uint32          current_timer     = 0,         /*updated at the start of every loop*/
                     ten_second_timer  = 0,         /*updated every 10000 milliseconds*/
@@ -273,6 +274,7 @@ int main                    (int          argc,
                     players_alive     = 0,
                     players_blast     = 0;         /*workaround to delay reset*/
     char            win_title[256]    = {'\0'},
+                    pause_msg[]       = "PAUSED",
                     p1_score[32]      = {'\0'},
                     p1_topscore[32]   = {'\0'},
                     p2_score[32]      = {'\0'},
@@ -951,6 +953,8 @@ int main                    (int          argc,
            frame_time = 250.f;
         prev_timer = current_timer;
 
+        if(!paused)
+        {
         if(current_timer - ten_second_timer > 5000) /*every 5 seconds*/
         {
             ten_second_timer = current_timer;
@@ -1436,6 +1440,7 @@ int main                    (int          argc,
             }
             frame_time -= min_time; /*decrement remaining time*/
         } /*while(frame_time > 0.f)*/
+        } /*if(!paused)*/
 
         /*** event polling ***/
         while(SDL_PollEvent(&event_main))
@@ -1451,6 +1456,13 @@ int main                    (int          argc,
             {
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
                     loop_exit     = true;
+                if(event_main.key.keysym.scancode == SDL_SCANCODE_P)
+                {
+                    if(paused)
+                       paused     = false;
+                    else
+                       paused     = true;
+                }
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
                     plyr[0].key_forward  = true;
                 if(event_main.key.keysym.scancode == SDL_SCANCODE_S)
@@ -1539,7 +1551,7 @@ int main                    (int          argc,
                                GL_UNSIGNED_BYTE,
                                (void*)(intptr_t)object_index_offsets[0]);
                 /*projectile*/
-                if(plyr[forloop_i].key_shoot)
+                if(plyr[forloop_i].key_shoot && !paused)
                 {
                     glTranslatef(plyr[forloop_i].shot.pos[0],plyr[forloop_i].shot.pos[1],0.f);
                     glDrawElements(GL_LINES,
@@ -1670,6 +1682,31 @@ int main                    (int          argc,
                 glTranslatef(0.06f, 0.f, 0.f);
             }
             glPopMatrix();
+        }
+        /*pause message*/
+        if(paused)
+        {
+            glTranslatef((-0.06f*strlen(pause_msg))/2.f, 0.04f, 0.f);
+            for(forloop_i = 0; (unsigned)forloop_i < sizeof(pause_msg); forloop_i++)
+            {
+                int tmp_char = 0;
+                if(pause_msg[forloop_i] != ' ')
+                {
+                    if(pause_msg[forloop_i] == '\0')
+                        break;
+                    else if(pause_msg[forloop_i] > 0x2F && pause_msg[forloop_i] < 0x3A)
+                        tmp_char = pause_msg[forloop_i] - 0x2B;
+                    else if(pause_msg[forloop_i] > 0x40 && pause_msg[forloop_i] < 0x5B)
+                        tmp_char = pause_msg[forloop_i] - 0x32;
+                    else
+                        break;
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char - 1]);
+                }
+                glTranslatef(0.06f, 0.f, 0.f);
+            }
         }
         /*swap framebuffer*/
         SDL_GL_SwapWindow(win_main);
