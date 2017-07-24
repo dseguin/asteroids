@@ -37,7 +37,14 @@
   #pragma comment(lib, "opengl32.lib")
   #define CONFIG_FS_DELIMIT '\\'
 #else
-  #if !defined _POSIX_C_SOURCE || !(_POSIX_C_SOURCE >= 200112L)
+  #ifdef __APPLE__
+    #include <mach-o/dyld.h>
+  #endif
+  #ifdef __FreeBSD__
+    #include <sys/types.h>
+    #include <sys/sysctl.h>
+  #endif
+  #if defined __linux__ && (!defined _POSIX_C_SOURCE || !(_POSIX_C_SOURCE >= 200112L))
     #define _POSIX_C_SOURCE 200112L /*needed for readlink()*/
   #endif
   #include <GL/gl.h>
@@ -1761,6 +1768,50 @@ bool get_config_options(options* config)
         return false;
     }
 
+    #elif defined __APPLE__
+
+    unsigned int bin_path_len = sizeof(bin_path);
+    char* tmp_path = malloc(bin_path_len);
+    /*get path to executable*/
+    /*if FILNAME_MAX is insuficient, try again with proper buffer size*/
+    if(_NSGetExecutablePath(tmp_path, &bin_path_len))
+    {
+        fprintf(stderr, "_NSGetExecutablePath error: Path size exceeded %d. Attempting to retrieve full path.\n", FILENAME_MAX);
+        tmp_path = realloc(bin_path_len);
+        if(_NSGetExecutablePath(tmp_path, &bin_path_len))
+        {
+            fprintf(stderr, "_NSGetExecutablePath error: Failed to retrieve executable path.\n");
+            free(tmp_path);
+            return false;
+        }
+        fprintf(stderr, "_NSGetExecutablePath: Successfully retrieved path '%s'\n", tmp_path);
+    }
+    /*Resolve path that may contain symlinks, '.', or '..'*/
+    if(realpath(tmp_path, bin_path) == NULL)
+    {
+        fprintf(stderr, "realpath error: Could not resolve filename '%s'. Instead got '%s'.\n", tmp_path, bin_path);
+        free(tmp_path);
+        return false;
+    }
+    free(tmp_path);
+    bin_path_len = strlen(bin_path);
+
+    #elif defined __FreeBSD__
+
+    /*build up Information Base*/
+    int mib[4];
+    mib[0] = CTL_KERN;
+    mib[1] = KERN_PROC;
+    mib[2] = KERN_PROC_PATHNAME;
+    mib[3] = -1; /*current process*/
+    size_t bin_path_len = sizeof(bin_path);
+    if(sysctl(mib, 4, bin_path, &bin_path_len, NULL, 0))
+    {
+        perror("sysctl error");
+        return false;
+    }
+    bin_path_len = strlen(bin_path);
+
     #else /*linux*/
 
     ssize_t bin_path_len = 0;
@@ -2106,10 +2157,10 @@ void get_real_point_pos(const float* original_vector,
                         const float  scale,
                         const float  rot)
 {
-    real_pos[0] = (original_vector[0] * cos(rot*M_PI/180.f) -
-                   original_vector[1] * sin(rot*M_PI/180.f)) * scale + trans[0];
-    real_pos[1] = (original_vector[0] * sin(rot*M_PI/180.f) +
-                   original_vector[1] * cos(rot*M_PI/180.f)) * scale + trans[1];
+    real_pos[0] = (original_vector[0] * cos(rot*-M_PI/180.f) -
+                   original_vector[1] * sin(rot*-M_PI/180.f)) * scale + trans[0];
+    real_pos[1] = (original_vector[0] * sin(rot*-M_PI/180.f) +
+                   original_vector[1] * cos(rot*-M_PI/180.f)) * scale + trans[1];
 }
 
 bool detect_aster_collision(float aster_a[6][6],
