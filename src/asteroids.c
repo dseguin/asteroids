@@ -172,13 +172,14 @@ typedef struct options {
     int         vsync;             /*1 = enabled, 0 = disabled, -1 = lateswap*/
     int         aster_max_count;   /*maximum number of asteroids that can spawn*/
     int         aster_init_count;  /*number of asteroids that spawn initially*/
+    unsigned    spawn_timer;       /*number of seconds until new asteroid can spawn*/
     float       aster_scale;       /*scale modifier*/
     float       aster_mass_large;  /*mass modifiers*/
     float       aster_mass_med;
     float       aster_mass_small;
     int         fullscreen;        /*0 = windowed, 1 = fullscreen, 2 = desktop fullscreen*/
-    resolution  winres;
-    resolution  fullres;
+    resolution  winres;            /*windowed resolution*/
+    resolution  fullres;           /*fullscreen resolution*/
 } options;
 
 /*** prototypes ***/
@@ -423,7 +424,7 @@ int main                    (int          argc,
     GLfloat         bottom_clip            = -1.f;
     /*default config options. See 'typedef struct options'.*/
     options         config                 = {
-        true, true, 1, 1, 8, 3, 1.f, 1.f,
+        true, true, 1, 1, 8, 3, 5, 1.f, 1.f,
         1.f, 1.f, 0, {800,600,60}, {0,0,0}};
     player*         plyr;
     asteroid*       aster;
@@ -703,6 +704,28 @@ int main                    (int          argc,
                                print_usage();
                                return 1;
                            }
+                /*-w asteroid spawn timer*/
+                case 'w' : if(forloop_i+2 > argc)
+                           {
+                               fprintf(stderr, "Option -w requires a specifier\n");
+                               print_usage();
+                               return 1;
+                           }
+                           if(!strcmp(argv[forloop_i+1], "off"))
+                               config.spawn_timer = 0;
+                           else
+                           {
+                               a_count = atoi(argv[forloop_i+1]);
+                               if(a_count > 0 && a_count <= 30)
+                                   config.spawn_timer = (unsigned)a_count;
+                               else
+                               {
+                                   fprintf(stderr, "Invalid spawn-timer parameter '%s'\n", argv[forloop_i+1]);
+                                   print_usage();
+                                   return 1;
+                               }
+                           }
+                           break;
                 default  : fprintf(stderr, "Invalid option '%s'\n", argv[forloop_i]);
                            print_usage();
                            return 1;
@@ -955,7 +978,7 @@ int main                    (int          argc,
 
         if(!paused)
         {
-        if(current_timer - ten_second_timer > 5000) /*every 5 seconds*/
+        if(config.spawn_timer && current_timer - ten_second_timer > config.spawn_timer*1000) /*every X seconds*/
         {
             ten_second_timer = current_timer;
             /*spawn new asteroid*/
@@ -1762,7 +1785,9 @@ void print_usage(void)
     printf("                   default is 800x600.\n");
     printf("        -s  VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
     printf("                   or lateswap. The default is on.\n");
-    printf("        -v         Print version info and exit.\n\n");
+    printf("        -v         Print version info and exit.\n");
+    printf("        -w  SEC    Sets asteroid spawn timer in seconds. Can be an integer\n");
+    printf("                   between 0 and 30, or 'off' to disable. The default is 5.\n\n");
     printf("'Simple Asteroids' uses a configuration file called 'asteroids.conf' that\n");
     printf("sits in the same directory as the program. If 'asteroids.conf' does not exist,\n");
     printf("it is generated at runtime using the default options. Details about config file\n");
@@ -1920,6 +1945,7 @@ bool get_config_options(options* config)
         fprintf(config_file, "# physics     - Enables asteroid collision physics. Can be 'on' or 'off'. The default is 'on'.\n");
         fprintf(config_file, "# init-count  - Number of asteroids that spawn initially. Can be between 0 and 16. The default is 3.\n");
         fprintf(config_file, "# max-count   - Maximum number of asteroids that can spawn. Can be between 0 and 256. The default is 8.\n");
+        fprintf(config_file, "# spawn-timer - Number of seconds until a new asteroid can spawn. Can be between 0 and 30, or 'off' to disable. The default is 5.\n");
         fprintf(config_file, "# aster-scale - Asteroid scale modifier. Can be between 0.5 and 2. The default is 1.\n");
         fprintf(config_file, "# aster-massL - Large asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
         fprintf(config_file, "# aster-massM - Medium asteroid mass modifier. Can be between 0.1 and 5. The default is 1.\n");
@@ -1927,6 +1953,7 @@ bool get_config_options(options* config)
         fprintf(config_file, "physics = on\n");
         fprintf(config_file, "init-count = 3\n");
         fprintf(config_file, "max-count = 8\n");
+        fprintf(config_file, "spawn-timer = 5\n");
         fprintf(config_file, "aster-scale = 1\n");
         fprintf(config_file, "aster-massL = 1\n");
         fprintf(config_file, "aster-massM = 1\n");
@@ -2141,6 +2168,24 @@ bool get_config_options(options* config)
                     config->friendly_fire = true;
                 if(!strcmp(config_token, "off"))
                     config->friendly_fire = false;
+            }
+        }
+        else if(!strcmp(config_token, "spawn-timer")) /*spawn_timer*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                if(!strcmp(config_token, "off"))
+                    config->spawn_timer = 0;
+                else
+                {
+                    i = atoi(config_token);
+                    if(i > 0 && i <= 30)
+                        config->spawn_timer = (unsigned)i;
+                    else
+                        fprintf(stderr, "Warning: In config file, 'spawn-timer' must be a number between 0 and 30, or 'off' to disable.\n");
+                }
             }
         }
     }
