@@ -11,7 +11,7 @@ TARGET := $(TARGETDIR)/asteroids
 SRCEXT := c
 SOURCES := asteroids.c
 OBJECTS := $(BUILDDIR)/asteroids.o
-DEBUGFLAGS := -Wall -Wextra -pedantic \
+DEBUGFLAGS := -Wall -Wextra -pedantic -Wfatal-errors \
 	-Wformat=2 -Wswitch-default -Wswitch-enum \
 	-Wcast-align -Wpointer-arith -Wbad-function-cast -Wstrict-overflow=5 \
 	-Wstrict-prototypes -Winline -Wundef -Wnested-externs -Wcast-qual -Wshadow \
