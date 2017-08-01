@@ -319,47 +319,31 @@ typedef struct options {
     resolution  fullres;
 } options;
 
-/*** init pointers ***/
-typedef struct st_init {
+/*** shared pointers ***/
+typedef struct st_shared {
     options        *config;
-    SDL_Window    **win_main;
-    SDL_GLContext  *win_main_gl;
     player        **plyr;
     asteroid      **aster;
+    SDL_Window    **win_main;
+    SDL_GLContext  *win_main_gl;
+    unsigned       *current_timer;
+    unsigned       *prev_timer;
+    unsigned       *ten_second_timer;
     int            *players_alive;
+    int            *players_blast;
     int            *width_real;
     int            *height_real;
     float          *left_clip;
     float          *right_clip;
     float          *top_clip;
     float          *bottom_clip;
-} st_init;
-
-/*** physics pointers ***/
-typedef struct st_physics {
-    options        *config;
-    player        **plyr;
-    asteroid      **aster;
-    SDL_Window    **win_main;
-    unsigned       *current_timer;
-    unsigned       *prev_timer;
-    unsigned       *ten_second_timer;
-    int            *players_alive;
-    int            *players_blast;
-    float          *left_clip;
-    float          *right_clip;
-    float          *top_clip;
-    float          *bottom_clip;
     float          *frame_time;
-} st_physics;
-
-/*** event polling pointers ***/
-typedef struct st_event {
-    options        *config;
-    player        **plyr;
-    bool           *loop_exit;
+    char           *fps;
+    char           *mspf;
     bool           *paused;
-} st_event;
+    bool           *show_fps;
+    bool           *loop_exit;
+} st_shared;
 
 /*** prototypes ***/
 /* Print info about SDL */
@@ -451,98 +435,93 @@ bool parse_cmd_args         (const int   argc,
  *
  *     init - struct containing variables required for init
  *
- * This is mostly boilerplate setup. Everything in st_init should
+ * This is mostly boilerplate setup. Everything in st_shared should
  * point to a defined variable in the main scope.
  *
  * Returns true if operation succeeds, false if an error occurs.
  **/
-bool init_                  (st_init *init);
+bool init_                  (st_shared *init);
 
 /* Poll for events.
  *
  *     ev - struct containing variables required for polling events
  *
- * Everything in st_event should point to a defined variable in the
+ * Everything in st_shared should point to a defined variable in the
  * main scope.
  **/
-void poll_events(st_event *ev);
+void poll_events            (st_shared *ev);
 
 /* Update physics.
  *
  *     phy - struct containing variables required for physics
  *
- * Everything int st_physics should point to a defined variable in
+ * Everything in st_shared should point to a defined variable in
  * the main scope.
  **/
-void update_physics(st_physics *phy);
+void update_physics         (st_shared *phy);
+
+/* Draw elements.
+ *
+ *     draw - struct containing variables required for drawing
+ *
+ * Everything in st_shared should point to a defined variable in
+ * the main scope.
+ **/
+void draw_objects           (st_shared *draw);
 
 int main                    (int    argc,
                              char **argv)
 {
     /*** variables ***/
-    bool            loop_exit         = false,
-                    paused            = false;
-    unsigned        current_timer     = 0,
-                    ten_second_timer  = 0,
-                    prev_timer        = 0,
-                    object_buffers[]  = {0,0};
-    float           frame_time        = 0.f,
-                    left_clip         = -1.f, /*screen bounds*/
-                    right_clip        = 1.f,
-                    top_clip          = 1.f,
-                    bottom_clip       = -1.f;
-    const float     rad_mod           = M_PI/180.f;
-    int             forloop_i         = 0,
-                    width_real        = 0,
-                    height_real       = 0,
-                    players_alive     = 0,
-                    players_blast     = 0; /*workaround to delay reset*/
-    char            pause_msg[]       = "PAUSED",
-                    p1_score[32]      = {'\0'},
-                    p1_topscore[32]   = {'\0'},
-                    p2_score[32]      = {'\0'},
-                    p2_topscore[32]   = {'\0'};
+    bool            loop_exit        = false,
+                    paused           = false,
+                    show_fps         = false;
+    unsigned        current_timer    = 0,
+                    ten_second_timer = 0,
+                    half_sec_timer   = 0,
+                    prev_timer       = 0;
+    float           frame_time       = 0.f,
+                    left_clip        = -1.f, /*screen bounds*/
+                    right_clip       = 1.f,
+                    top_clip         = 1.f,
+                    bottom_clip      = -1.f;
+    int             width_real       = 0,
+                    height_real      = 0,
+                    players_alive    = 0,
+                    players_blast    = 0; /*workaround to delay reset*/
+    char            fps[32]          = {'\0'},
+                    mspf[32]         = {'\0'};
     SDL_Window     *win_main;
     SDL_GLContext   win_main_gl;
-    st_init         init_vars;
-    st_physics      phy_vars;
-    st_event        event_p;
-    options         config            = { /*default config options.*/
-        true, true, 1, 1, 8, 3, 5, 1.f, 1.f,
-        1.f, 1.f, 0, {800,600,60}, {0,0,0}};
+    st_shared       shared_vars;
     player         *plyr;
     asteroid       *aster;
-    /*make outside vars point to inside vars*/
-    event_p.config            = &config;
-    event_p.plyr              = &plyr;
-    event_p.loop_exit         = &loop_exit;
-    event_p.paused            = &paused;
-    init_vars.config          = &config;
-    init_vars.win_main        = &win_main;
-    init_vars.win_main_gl     = &win_main_gl;
-    init_vars.plyr            = &plyr;
-    init_vars.aster           = &aster;
-    init_vars.players_alive   = &players_alive;
-    init_vars.width_real      = &width_real;
-    init_vars.height_real     = &height_real;
-    init_vars.left_clip       = &left_clip;
-    init_vars.right_clip      = &right_clip;
-    init_vars.top_clip        = &top_clip;
-    init_vars.bottom_clip     = &bottom_clip;
-    phy_vars.plyr             = &plyr;
-    phy_vars.aster            = &aster;
-    phy_vars.config           = &config;
-    phy_vars.win_main         = &win_main;
-    phy_vars.current_timer    = &current_timer;
-    phy_vars.prev_timer       = &prev_timer;
-    phy_vars.ten_second_timer = &ten_second_timer;
-    phy_vars.players_alive    = &players_alive;
-    phy_vars.players_blast    = &players_blast;
-    phy_vars.left_clip        = &left_clip;
-    phy_vars.right_clip       = &right_clip;
-    phy_vars.top_clip         = &top_clip;
-    phy_vars.bottom_clip      = &bottom_clip;
-    phy_vars.frame_time       = &frame_time;
+    options         config           = { /*default config options.*/
+        true, true, 1, 1, 8, 3, 5, 1.f, 1.f,
+        1.f, 1.f, 0, {800,600,60}, {0,0,0}};
+    /*make pointers to shared vars*/
+    shared_vars.aster                = &aster;
+    shared_vars.bottom_clip          = &bottom_clip;
+    shared_vars.config               = &config;
+    shared_vars.current_timer        = &current_timer;
+    shared_vars.fps                  = fps;
+    shared_vars.frame_time           = &frame_time;
+    shared_vars.height_real          = &height_real;
+    shared_vars.left_clip            = &left_clip;
+    shared_vars.loop_exit            = &loop_exit;
+    shared_vars.mspf                 = mspf;
+    shared_vars.paused               = &paused;
+    shared_vars.players_alive        = &players_alive;
+    shared_vars.players_blast        = &players_blast;
+    shared_vars.plyr                 = &plyr;
+    shared_vars.prev_timer           = &prev_timer;
+    shared_vars.right_clip           = &right_clip;
+    shared_vars.show_fps             = &show_fps;
+    shared_vars.ten_second_timer     = &ten_second_timer;
+    shared_vars.top_clip             = &top_clip;
+    shared_vars.width_real           = &width_real;
+    shared_vars.win_main             = &win_main;
+    shared_vars.win_main_gl          = &win_main_gl;
 
     /*read config file*/
     if(!get_config_options(&config))
@@ -553,55 +532,8 @@ int main                    (int    argc,
         return 1;
 
     /*init*/
-    if(!init_(&init_vars))
+    if(!init_(&shared_vars))
         return 1;
-
-    /*** Buffer Objects ***/
-    glGenBuffersARB_ptr(2, object_buffers);
-    glBindBufferARB_ptr(GL_ARRAY_BUFFER, object_buffers[0]);
-    glBufferDataARB_ptr(GL_ARRAY_BUFFER, sizeof(object_verts),
-            object_verts, GL_STATIC_DRAW);
-    glBindBufferARB_ptr(GL_ELEMENT_ARRAY_BUFFER, object_buffers[1]);
-    glBufferDataARB_ptr(GL_ELEMENT_ARRAY_BUFFER, sizeof(object_index),
-            object_index, GL_STATIC_DRAW);
-    glInterleavedArrays(GL_V2F, 0, (void*)(intptr_t)(0));
-
-    /*set RNG and spawn 3 asteroids*/
-    srand((unsigned)time(NULL));
-    for(forloop_i=0; forloop_i < config.aster_init_count &&
-                     forloop_i < config.aster_max_count; forloop_i++)
-    {
-        aster[forloop_i].is_spawned = 1;
-        aster[forloop_i].collided   = -1;
-        if(rand() & 0x01)      /*50%*/
-        {
-            aster[forloop_i].mass   = config.aster_mass_small * MASS_SMALL;
-            aster[forloop_i].scale  = config.aster_scale * ASTER_SMALL;
-        }
-        else if(rand() & 0x01) /*25%*/
-        {
-            aster[forloop_i].mass   = config.aster_mass_med * MASS_MED;
-            aster[forloop_i].scale  = config.aster_scale * ASTER_MED;
-        }
-        else                   /*25%*/
-        {
-            aster[forloop_i].mass   = config.aster_mass_large * MASS_LARGE;
-            aster[forloop_i].scale  = config.aster_scale * ASTER_LARGE;
-        }
-        aster[forloop_i].pos[0]     = left_clip;
-        aster[forloop_i].pos[1]     = ((rand()%200)-100)*0.01f;
-        aster[forloop_i].vel[0]     = ((rand()%20)-10)*0.0005f;
-        aster[forloop_i].vel[1]     = ((rand()%20)-10)*0.0005f;
-        aster[forloop_i].angle      = (float)(rand()%360);
-        aster[forloop_i].vel[0]     = aster[forloop_i].vel[0] *
-                                          sin(aster[forloop_i].angle*rad_mod);
-        aster[forloop_i].vel[1]     = aster[forloop_i].vel[1] *
-                                          cos(aster[forloop_i].angle*rad_mod);
-        aster[forloop_i].rot_speed  = ((rand()%400)-200)*0.01f;
-    }
-
-    /*get time in milliseconds*/
-    prev_timer = SDL_GetTicks();
 
     /*** main loop ***/
     while(!loop_exit)
@@ -609,231 +541,29 @@ int main                    (int    argc,
         /*get last frame time in milliseconds*/
         current_timer = SDL_GetTicks();
         frame_time = (float)(current_timer - prev_timer);
+        if(current_timer - half_sec_timer > 500)
+        {
+            half_sec_timer = current_timer;
+            if(show_fps)
+            {
+                sprintf(mspf, "%.2f MS", frame_time);
+                sprintf(fps,  "%.2f FPS", 1.f/(frame_time*0.001f));
+            }
+        }
         if(frame_time > 250.f) /*yikes*/
            frame_time = 250.f;
         prev_timer = current_timer;
 
         /*** physics ***/
         if(!paused)
-            update_physics(&phy_vars);
+            update_physics(&shared_vars);
 
         /*** event polling ***/
-        poll_events(&event_p);
+        poll_events(&shared_vars);
 
         /*** drawing ***/
-        glViewport(0, 0, width_real, height_real);
-        glClear(GL_COLOR_BUFFER_BIT);
-        glMatrixMode(GL_PROJECTION);
-        glLoadIdentity();
-        glOrtho(left_clip, right_clip, bottom_clip, top_clip, -1.f, 1.f);
-        glMatrixMode(GL_MODELVIEW);
-        glLoadIdentity();
-        /*asteroids*/
-        for(forloop_i = 0; forloop_i < config.aster_max_count; forloop_i++)
-        {
-            if(aster[forloop_i].is_spawned)
-            {
-                glPushMatrix();
-                glTranslatef(aster[forloop_i].pos[0],
-                             aster[forloop_i].pos[1], 0.f);
-                glScalef(aster[forloop_i].scale,aster[forloop_i].scale,1.f);
-                glRotatef(aster[forloop_i].rot, 0.f, 0.f, -1.f);
-                /*draw asteroid 'i'*/
-                glDrawElements(GL_LINE_LOOP,
-                               object_element_count[5],
-                               GL_UNSIGNED_BYTE,
-                               (void*)(intptr_t)object_index_offsets[2]);
-                glPopMatrix();
-            }
-        }
-        /*players*/
-        for(forloop_i = 0; forloop_i < config.player_count; forloop_i++)
-        {
-            glPushMatrix();
-            glTranslatef(plyr[forloop_i].pos[0], plyr[forloop_i].pos[1], 0.f);
-            if(!plyr[forloop_i].died) /*still alive*/
-            {
-                glRotatef(plyr[forloop_i].rot, 0.f, 0.f, -1.f);
-                glDrawElements(GL_LINE_LOOP,
-                               object_element_count[1],
-                               GL_UNSIGNED_BYTE,
-                               (void*)(intptr_t)object_index_offsets[0]);
-                /*projectile*/
-                if(plyr[forloop_i].key_shoot && !paused)
-                {
-                    glTranslatef(plyr[forloop_i].shot.pos[0],
-                                 plyr[forloop_i].shot.pos[1], 0.f);
-                    glDrawElements(GL_LINES,
-                                   object_element_count[3],
-                                   GL_UNSIGNED_BYTE,
-                                   (void*)(intptr_t)object_index_offsets[1]);
-                }
-            }
-            else /*player death effect*/
-            {
-                glPushMatrix();
-                glScalef(plyr[forloop_i].blast_scale,
-                         plyr[forloop_i].blast_scale, 1.f);
-                glDrawElements(GL_LINES,
-                               object_element_count[7],
-                               GL_UNSIGNED_BYTE,
-                               (void*)(intptr_t)object_index_offsets[3]);
-                glPopMatrix();
-                /*draw second smaller effect at 90 degree rotation*/
-                glScalef(plyr[forloop_i].blast_scale*0.5f,
-                         plyr[forloop_i].blast_scale*0.5f, 1.f);
-                glRotatef(90.f, 0.f, 0.f, -1.f);
-                glDrawElements(GL_LINES,
-                               object_element_count[7],
-                               GL_UNSIGNED_BYTE,
-                               (void*)(intptr_t)object_index_offsets[3]);
-            }
-            glPopMatrix();
-        }
-        /*score*/
-        sprintf(p1_score,    "SCORE     %d", plyr[0].score);
-        sprintf(p1_topscore, "HI SCORE  %d", plyr[0].top_score);
-        glPushMatrix(); /*P1 SCORE*/
-        glTranslatef(left_clip + 0.02f, top_clip - 0.02f, 0.f);
-        glScalef(0.5f, 0.5f, 0.f);
-        for(forloop_i = 0; (unsigned)forloop_i < sizeof(p1_score);
-            forloop_i++)
-        {
-            int tmp_char = 0;
-            if(p1_score[forloop_i] != ' ')
-            {
-                if(p1_score[forloop_i] == '\0')
-                    break;
-                else if(p1_score[forloop_i] > 0x2F &&
-                        p1_score[forloop_i] < 0x3A)
-                    tmp_char = p1_score[forloop_i] - 0x2B;
-                else if(p1_score[forloop_i] > 0x40 &&
-                        p1_score[forloop_i] < 0x5B)
-                    tmp_char = p1_score[forloop_i] - 0x32;
-                else
-                    break;
-                glDrawElements(GL_LINE_STRIP,
-                            object_element_count[(tmp_char*2)-1],
-                            GL_UNSIGNED_BYTE,
-                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
-            }
-            glTranslatef(0.06f, 0.f, 0.f);
-        }
-        glPopMatrix();
-        glPushMatrix(); /*P1 HI SCORE*/
-        glTranslatef(left_clip + 0.02f, top_clip - 0.08f, 0.f);
-        glScalef(0.5f, 0.5f, 0.f);
-        for(forloop_i = 0; (unsigned)forloop_i < sizeof(p1_topscore);
-            forloop_i++)
-        {
-            int tmp_char = 0;
-            if(p1_topscore[forloop_i] != ' ')
-            {
-                if(p1_topscore[forloop_i] == '\0')
-                    break;
-                else if(p1_topscore[forloop_i] > 0x2F &&
-                        p1_topscore[forloop_i] < 0x3A)
-                    tmp_char = p1_topscore[forloop_i] - 0x2B;
-                else if(p1_topscore[forloop_i] > 0x40 &&
-                        p1_topscore[forloop_i] < 0x5B)
-                    tmp_char = p1_topscore[forloop_i] - 0x32;
-                else
-                    break;
-                glDrawElements(GL_LINE_STRIP,
-                            object_element_count[(tmp_char*2)-1],
-                            GL_UNSIGNED_BYTE,
-                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
-            }
-            glTranslatef(0.06f, 0.f, 0.f);
-        }
-        glPopMatrix();
-        if(config.player_count > 1)
-        {
-            sprintf(p2_score,    "SCORE     %d", plyr[1].score);
-            sprintf(p2_topscore, "HI SCORE  %d", plyr[1].top_score);
-            glPushMatrix(); /*P2 SCORE*/
-            glTranslatef(right_clip - 7.f*0.06f - 0.02f, top_clip - 0.02f,0.f);
-            glScalef(0.5f, 0.5f, 0.f);
-            for(forloop_i = 0; (unsigned)forloop_i < sizeof(p2_score);
-                forloop_i++)
-            {
-                int tmp_char = 0;
-                if(p2_score[forloop_i] != ' ')
-                {
-                    if(p2_score[forloop_i] == '\0')
-                        break;
-                    else if(p2_score[forloop_i] > 0x2F &&
-                            p2_score[forloop_i] < 0x3A)
-                        tmp_char = p2_score[forloop_i] - 0x2B;
-                    else if(p2_score[forloop_i] > 0x40 &&
-                            p2_score[forloop_i] < 0x5B)
-                        tmp_char = p2_score[forloop_i] - 0x32;
-                    else
-                        break;
-                    glDrawElements(GL_LINE_STRIP,
-                            object_element_count[(tmp_char*2)-1],
-                            GL_UNSIGNED_BYTE,
-                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
-                }
-                glTranslatef(0.06f, 0.f, 0.f);
-            }
-            glPopMatrix();
-            glPushMatrix(); /*P2 HI SCORE*/
-            glTranslatef(right_clip - 7.f*0.06f - 0.02f, top_clip - 0.08f,0.f);
-            glScalef(0.5f, 0.5f, 0.f);
-            for(forloop_i = 0; (unsigned)forloop_i < sizeof(p2_topscore);
-                forloop_i++)
-            {
-                int tmp_char = 0;
-                if(p2_topscore[forloop_i] != ' ')
-                {
-                    if(p2_topscore[forloop_i] == '\0')
-                        break;
-                    else if(p2_topscore[forloop_i] > 0x2F &&
-                            p2_topscore[forloop_i] < 0x3A)
-                        tmp_char = p2_topscore[forloop_i] - 0x2B;
-                    else if(p2_topscore[forloop_i] > 0x40 &&
-                            p2_topscore[forloop_i] < 0x5B)
-                        tmp_char = p2_topscore[forloop_i] - 0x32;
-                    else
-                        break;
-                    glDrawElements(GL_LINE_STRIP,
-                            object_element_count[(tmp_char*2)-1],
-                            GL_UNSIGNED_BYTE,
-                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
-                }
-                glTranslatef(0.06f, 0.f, 0.f);
-            }
-            glPopMatrix();
-        }
-        /*pause message*/
-        if(paused)
-        {
-            glTranslatef((-0.06f*strlen(pause_msg))*0.5f, 0.04f, 0.f);
-            for(forloop_i = 0; (unsigned)forloop_i < sizeof(pause_msg);
-                forloop_i++)
-            {
-                int tmp_char = 0;
-                if(pause_msg[forloop_i] != ' ')
-                {
-                    if(pause_msg[forloop_i] == '\0')
-                        break;
-                    else if(pause_msg[forloop_i] > 0x2F &&
-                            pause_msg[forloop_i] < 0x3A)
-                        tmp_char = pause_msg[forloop_i] - 0x2B;
-                    else if(pause_msg[forloop_i] > 0x40 &&
-                            pause_msg[forloop_i] < 0x5B)
-                        tmp_char = pause_msg[forloop_i] - 0x32;
-                    else
-                        break;
-                    glDrawElements(GL_LINE_STRIP,
-                            object_element_count[(tmp_char*2)-1],
-                            GL_UNSIGNED_BYTE,
-                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
-                }
-                glTranslatef(0.06f, 0.f, 0.f);
-            }
-        }
+        draw_objects(&shared_vars);
+
         /*swap framebuffer*/
         SDL_GL_SwapWindow(win_main);
     }
@@ -1638,9 +1368,11 @@ bool parse_cmd_args(const int   argc,
     return true;
 }
 
-bool init_(st_init *init)
+bool init_(st_shared *init)
 {
     int i,j,k;
+    unsigned object_buffers[] = {0,0};
+    const float rad_mod = M_PI/180.f;
     SDL_DisplayMode mode_current;
     SDL_DisplayMode mode_target;
     SDL_DisplayMode mode_default = {0,800,600,0,0};
@@ -1789,7 +1521,8 @@ bool init_(st_init *init)
     {
         if(init->config->vsync == -1)
         {
-            fprintf(stderr, "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n",
+            fprintf(stderr,
+  "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n",
                     SDL_GetError());
             SDL_ClearError();
             if(SDL_GL_SetSwapInterval(1))
@@ -1843,10 +1576,61 @@ bool init_(st_init *init)
         (glBindBufferARB_Func) SDL_GL_GetProcAddress("glBindBufferARB");
     glBufferDataARB_ptr =
         (glBufferDataARB_Func) SDL_GL_GetProcAddress("glBufferDataARB");
+    /*** Buffer Objects ***/
+    glGenBuffersARB_ptr(2, object_buffers);
+    glBindBufferARB_ptr(GL_ARRAY_BUFFER, object_buffers[0]);
+    glBufferDataARB_ptr(GL_ARRAY_BUFFER, sizeof(object_verts),
+            object_verts, GL_STATIC_DRAW);
+    glBindBufferARB_ptr(GL_ELEMENT_ARRAY_BUFFER, object_buffers[1]);
+    glBufferDataARB_ptr(GL_ELEMENT_ARRAY_BUFFER, sizeof(object_index),
+            object_index, GL_STATIC_DRAW);
+    glInterleavedArrays(GL_V2F, 0, (void*)(intptr_t)(0));
+
+    /*set RNG and spawn 3 asteroids*/
+    srand((unsigned)time(NULL));
+    for(i = 0; i < (*init->config).aster_init_count &&
+               i < (*init->config).aster_max_count; i++)
+    {
+        (*init->aster)[i].is_spawned = 1;
+        (*init->aster)[i].collided   = -1;
+        if(rand() & 0x01)      /*50%*/
+        {
+            (*init->aster)[i].mass   = (*init->config).aster_mass_small *
+                                            MASS_SMALL;
+            (*init->aster)[i].scale  = (*init->config).aster_scale      *
+                                            ASTER_SMALL;
+        }
+        else if(rand() & 0x01) /*25%*/
+        {
+            (*init->aster)[i].mass   = (*init->config).aster_mass_med   *
+                                            MASS_MED;
+            (*init->aster)[i].scale  = (*init->config).aster_scale      *
+                                            ASTER_MED;
+        }
+        else                   /*25%*/
+        {
+            (*init->aster)[i].mass   = (*init->config).aster_mass_large *
+                                            MASS_LARGE;
+            (*init->aster)[i].scale  = (*init->config).aster_scale      *
+                                            ASTER_LARGE;
+        }
+        (*init->aster)[i].pos[0]     = *init->left_clip;
+        (*init->aster)[i].pos[1]     = ((rand()%200)-100)*0.01f;
+        (*init->aster)[i].vel[0]     = ((rand()%20)-10)*0.0005f;
+        (*init->aster)[i].vel[1]     = ((rand()%20)-10)*0.0005f;
+        (*init->aster)[i].angle      = (float)(rand()%360);
+        (*init->aster)[i].vel[0]     = (*init->aster)[i].vel[0] *
+                                        sin((*init->aster)[i].angle*rad_mod);
+        (*init->aster)[i].vel[1]     = (*init->aster)[i].vel[1] *
+                                        cos((*init->aster)[i].angle*rad_mod);
+        (*init->aster)[i].rot_speed  = ((rand()%400)-200)*0.01f;
+    }
+    /*get time in milliseconds*/
+    *init->prev_timer = SDL_GetTicks();
     return true;
 }
 
-void update_physics(st_physics *phy)
+void update_physics(st_shared *phy)
 {
     int         i,j,k,l;
     char        win_title[256]   = {'\0'};
@@ -1949,6 +1733,7 @@ void update_physics(st_physics *phy)
                         (min_time/target_time)*(min_time/target_time);
                 }
                 /*clamp velocity*/
+                #if 0
                 if((*phy->plyr)[i].vel[0] > 0.02f *(min_time/target_time)
                         && min_time > 0.0001f)
                    (*phy->plyr)[i].vel[0] = 0.02f *(min_time/target_time);
@@ -1961,6 +1746,7 @@ void update_physics(st_physics *phy)
                 if((*phy->plyr)[i].vel[1] < -0.02f*(min_time/target_time)
                         && min_time > 0.0001f)
                    (*phy->plyr)[i].vel[1] = -0.02f*(min_time/target_time);
+                #endif
                 /*update position*/
                 (*phy->plyr)[i].pos[0] += (*phy->plyr)[i].vel[0];
                 (*phy->plyr)[i].pos[1] += (*phy->plyr)[i].vel[1];
@@ -2456,7 +2242,7 @@ void update_physics(st_physics *phy)
     } /*while(frame_time > 0.f)*/
 }
 
-void poll_events(st_event *ev)
+void poll_events(st_shared *ev)
 {
     SDL_Event event_main;
     while(SDL_PollEvent(&event_main))
@@ -2478,6 +2264,13 @@ void poll_events(st_event *ev)
                    *ev->paused     = false;
                 else
                    *ev->paused     = true;
+            }
+            else if(event_main.key.keysym.scancode == SDL_SCANCODE_GRAVE)
+            {
+                if(*ev->show_fps)
+                   *ev->show_fps   = false;
+                else
+                   *ev->show_fps   = true;
             }
             else if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
                 (*ev->plyr)[0].key_forward  = true;
@@ -2535,6 +2328,304 @@ void poll_events(st_event *ev)
                     (*ev->plyr)[1].key_shoot    = false;
             }
         }
+    }
+}
+
+void draw_objects(st_shared *draw)
+{
+    int i;
+    char pause_msg[]     = "PAUSED";
+    char p1_score[32]    = {'\0'};
+    char p1_topscore[32] = {'\0'};
+    char p2_score[32]    = {'\0'};
+    char p2_topscore[32] = {'\0'};
+
+    glViewport(0, 0, *draw->width_real, *draw->height_real);
+    glClear(GL_COLOR_BUFFER_BIT);
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(*draw->left_clip, *draw->right_clip,
+            *draw->bottom_clip, *draw->top_clip, -1.f, 1.f);
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+    /*asteroids*/
+    for(i = 0; i < (*draw->config).aster_max_count; i++)
+    {
+        if((*draw->aster)[i].is_spawned)
+        {
+            glPushMatrix();
+            glTranslatef((*draw->aster)[i].pos[0],
+                         (*draw->aster)[i].pos[1], 0.f);
+            glScalef((*draw->aster)[i].scale,(*draw->aster)[i].scale,1.f);
+            glRotatef((*draw->aster)[i].rot, 0.f, 0.f, -1.f);
+            /*draw asteroid 'i'*/
+            glDrawElements(GL_LINE_LOOP,
+                           object_element_count[5],
+                           GL_UNSIGNED_BYTE,
+                           (void*)(intptr_t)object_index_offsets[2]);
+            glPopMatrix();
+        }
+    }
+    /*players*/
+    for(i = 0; i < (*draw->config).player_count; i++)
+    {
+        glPushMatrix();
+        glTranslatef((*draw->plyr)[i].pos[0], (*draw->plyr)[i].pos[1], 0.f);
+        if(!(*draw->plyr)[i].died) /*still alive*/
+        {
+            glRotatef((*draw->plyr)[i].rot, 0.f, 0.f, -1.f);
+            glDrawElements(GL_LINE_LOOP,
+                           object_element_count[1],
+                           GL_UNSIGNED_BYTE,
+                           (void*)(intptr_t)object_index_offsets[0]);
+            /*projectile*/
+            if((*draw->plyr)[i].key_shoot && !*draw->paused)
+            {
+                glTranslatef((*draw->plyr)[i].shot.pos[0],
+                             (*draw->plyr)[i].shot.pos[1], 0.f);
+                glDrawElements(GL_LINES,
+                               object_element_count[3],
+                               GL_UNSIGNED_BYTE,
+                               (void*)(intptr_t)object_index_offsets[1]);
+            }
+        }
+        else /*player death effect*/
+        {
+            glPushMatrix();
+            glScalef((*draw->plyr)[i].blast_scale,
+                     (*draw->plyr)[i].blast_scale, 1.f);
+            glDrawElements(GL_LINES,
+                           object_element_count[7],
+                           GL_UNSIGNED_BYTE,
+                           (void*)(intptr_t)object_index_offsets[3]);
+            glPopMatrix();
+            /*draw second smaller effect at 90 degree rotation*/
+            glScalef((*draw->plyr)[i].blast_scale*0.5f,
+                     (*draw->plyr)[i].blast_scale*0.5f, 1.f);
+            glRotatef(90.f, 0.f, 0.f, -1.f);
+            glDrawElements(GL_LINES,
+                           object_element_count[7],
+                           GL_UNSIGNED_BYTE,
+                           (void*)(intptr_t)object_index_offsets[3]);
+        }
+        glPopMatrix();
+    }
+    /*score*/
+    sprintf(p1_score,    "SCORE     %d", (*draw->plyr)[0].score);
+    sprintf(p1_topscore, "HI SCORE  %d", (*draw->plyr)[0].top_score);
+    glPushMatrix(); /*P1 SCORE*/
+    glTranslatef(*draw->left_clip + 0.02f, *draw->top_clip - 0.02f, 0.f);
+    glScalef(0.5f, 0.5f, 0.f);
+    for(i = 0; (unsigned)i < sizeof(p1_score); i++)
+    {
+        int tmp_char = 0;
+        if(p1_score[i] != ' ')
+        {
+            if(p1_score[i] == '\0')
+                break;
+            else if(p1_score[i] > 0x2F && p1_score[i] < 0x3A)
+                tmp_char = p1_score[i] - 0x2B; /* 0-9 */
+            else if(p1_score[i] > 0x40 && p1_score[i] < 0x5B)
+                tmp_char = p1_score[i] - 0x32; /* A-Z */
+            else
+                break;
+            glDrawElements(GL_LINE_STRIP,
+                           object_element_count[(tmp_char*2)-1],
+                           GL_UNSIGNED_BYTE,
+                           (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+        }
+        glTranslatef(0.06f, 0.f, 0.f);
+    }
+    glPopMatrix();
+    glPushMatrix(); /*P1 HI SCORE*/
+    glTranslatef(*draw->left_clip + 0.02f, *draw->top_clip - 0.08f, 0.f);
+    glScalef(0.5f, 0.5f, 0.f);
+    for(i = 0; (unsigned)i < sizeof(p1_topscore); i++)
+    {
+        int tmp_char = 0;
+        if(p1_topscore[i] != ' ')
+        {
+            if(p1_topscore[i] == '\0')
+                break;
+            else if(p1_topscore[i] > 0x2F &&
+                    p1_topscore[i] < 0x3A) /* 0-9 */
+                tmp_char = p1_topscore[i] - 0x2B;
+            else if(p1_topscore[i] > 0x40 &&
+                    p1_topscore[i] < 0x5B) /* A-Z */
+                tmp_char = p1_topscore[i] - 0x32;
+            else
+                break;
+            glDrawElements(GL_LINE_STRIP,
+                           object_element_count[(tmp_char*2)-1],
+                           GL_UNSIGNED_BYTE,
+                           (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+        }
+        glTranslatef(0.06f, 0.f, 0.f);
+    }
+    glPopMatrix();
+    if((*draw->config).player_count > 1)
+    {
+        sprintf(p2_score,    "SCORE     %d", (*draw->plyr)[1].score);
+        sprintf(p2_topscore, "HI SCORE  %d", (*draw->plyr)[1].top_score);
+        glPushMatrix(); /*P2 SCORE*/
+        glTranslatef(*draw->right_clip - 7.f*0.06f - 0.02f,
+                     *draw->top_clip - 0.02f, 0.f);
+        glScalef(0.5f, 0.5f, 0.f);
+        for(i = 0; (unsigned)i < sizeof(p2_score); i++)
+        {
+            int tmp_char = 0;
+            if(p2_score[i] != ' ')
+            {
+                if(p2_score[i] == '\0')
+                    break;
+                else if(p2_score[i] > 0x2F &&
+                        p2_score[i] < 0x3A) /* 0-9 */
+                    tmp_char = p2_score[i] - 0x2B;
+                else if(p2_score[i] > 0x40 &&
+                        p2_score[i] < 0x5B) /* A-Z */
+                    tmp_char = p2_score[i] - 0x32;
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
+        glPushMatrix(); /*P2 HI SCORE*/
+        glTranslatef(*draw->right_clip - 7.f*0.06f - 0.02f,
+                     *draw->top_clip - 0.08f, 0.f);
+        glScalef(0.5f, 0.5f, 0.f);
+        for(i = 0; (unsigned)i < sizeof(p2_topscore); i++)
+        {
+            int tmp_char = 0;
+            if(p2_topscore[i] != ' ')
+            {
+                if(p2_topscore[i] == '\0')
+                    break;
+                else if(p2_topscore[i] > 0x2F &&
+                        p2_topscore[i] < 0x3A) /* 0-9 */
+                    tmp_char = p2_topscore[i] - 0x2B;
+                else if(p2_topscore[i] > 0x40 &&
+                        p2_topscore[i] < 0x5B) /* A-Z */
+                    tmp_char = p2_topscore[i] - 0x32;
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
+    }
+    /*pause message*/
+    if(*draw->paused)
+    {
+        glPushMatrix();
+        glTranslatef((-0.06f*strlen(pause_msg))*0.5f, 0.04f, 0.f);
+        for(i = 0; (unsigned)i < sizeof(pause_msg); i++)
+        {
+            int tmp_char = 0;
+            if(pause_msg[i] != ' ')
+            {
+                if(pause_msg[i] == '\0')
+                    break;
+                else if(pause_msg[i] > 0x2F &&
+                        pause_msg[i] < 0x3A) /* 0-9 */
+                    tmp_char = pause_msg[i] - 0x2B;
+                else if(pause_msg[i] > 0x40 &&
+                        pause_msg[i] < 0x5B) /* A-Z */
+                    tmp_char = pause_msg[i] - 0x32;
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
+    }
+    /*fps indicator*/
+    if(*draw->show_fps)
+    {
+        glPushMatrix();
+        glTranslatef(*draw->left_clip + 0.02f, *draw->bottom_clip + 0.12f,0.f);
+        glScalef(0.5f, 0.5f, 0.f);
+        for(i = 0; (unsigned)i < strlen(draw->fps); i++)
+        {
+            int tmp_char = 0;
+            if((draw->fps)[i] != ' ')
+            {
+                if((draw->fps)[i] == '\0')
+                    break;
+                else if((draw->fps)[i] > 0x2F &&
+                        (draw->fps)[i] < 0x3A) /* 0-9 */
+                    tmp_char = (draw->fps)[i] - 0x2B;
+                else if((draw->fps)[i] > 0x40 &&
+                        (draw->fps)[i] < 0x5B) /* A-Z */
+                    tmp_char = (draw->fps)[i] - 0x32;
+                else if((draw->fps)[i] == 0x2E) /* . */
+                {
+                    tmp_char = 2;
+                    glPushMatrix();
+                    glTranslatef(0.f, -0.08f, 0.f);
+                }
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+                if(tmp_char == 2)
+                    glPopMatrix();
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
+    }
+    /*mspf indicator*/
+    if(*draw->show_fps)
+    {
+        glPushMatrix();
+        glTranslatef(*draw->left_clip + 0.02f, *draw->bottom_clip + 0.06f,0.f);
+        glScalef(0.5f, 0.5f, 0.f);
+        for(i = 0; (unsigned)i < strlen(draw->mspf); i++)
+        {
+            int tmp_char = 0;
+            if((draw->mspf)[i] != ' ')
+            {
+                if((draw->mspf)[i] == '\0')
+                    break;
+                else if((draw->mspf)[i] > 0x2F &&
+                        (draw->mspf)[i] < 0x3A) /* 0-9 */
+                    tmp_char = (draw->mspf)[i] - 0x2B;
+                else if((draw->mspf)[i] > 0x40 &&
+                        (draw->mspf)[i] < 0x5B) /* A-Z */
+                    tmp_char = (draw->mspf)[i] - 0x32;
+                else if((draw->mspf)[i] == 0x2E) /* . */
+                {
+                    tmp_char = 2;
+                    glPushMatrix();
+                    glTranslatef(0.f, -0.08f, 0.f);
+                }
+                else
+                    break;
+                glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+                if(tmp_char == 2)
+                    glPopMatrix();
+            }
+            glTranslatef(0.06f, 0.f, 0.f);
+        }
+        glPopMatrix();
     }
 }
 
