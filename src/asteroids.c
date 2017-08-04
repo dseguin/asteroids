@@ -73,6 +73,13 @@
   #endif
 #endif
 
+#define AUDIO_SAMPLE_RATE    8000
+#define AUDIO_CALLBACK_BYTES 256
+#define AUDIO_MIX_CHANNELS   8
+#define SFX_MAX_TUNES   0x1F
+#define SFX_TUNE(x)     ((x) < SFX_MAX_TUNES ? (x) : 0x00)
+#define SFX_PLAYER_HIT  SFX_MAX_TUNES + 1
+#define SFX_ASTER_HIT   SFX_MAX_TUNES + 2
 #define CONF_LINE_MAX   128
 #define PLAYER_MAX      2
 #define true            '\x01'
@@ -244,6 +251,19 @@ const unsigned char object_element_count[] = {
     22,6, 22,6, 22,6, 22,4, 22,4,
     22,3, 22,5, 22,5, 22,5, 22,4};
 
+/*notes in distance from A4 (440Hz)*/
+const int tune_index[2][16] = {
+    {2, -10, 2, 0, 2, 3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {3, 2, 0, -2, -4, -2, 0, 2, 3, 5, 3, 0, 0, 0, 0, 0}};
+
+/*length that a note plays*/
+const int tune_timing[2][16] = {
+    {16, 4, 6, 6, 6, 16, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+    {7, 7, 7, 7, 7, 7, 7, 7, 14, 14, 14, 0, 0, 0, 0, 0}};
+
+/*number of elements in a tune*/
+const unsigned tune_count[2] = {6, 11};
+
 /*** asteroid object ***
  *
  * Each asteroid is a line loop with a non-convex shape.
@@ -294,6 +314,31 @@ typedef struct player {
     projectile  shot;
 } player;
 
+/*** SFX channel ***
+ *
+ * An array of st_audio represents different audio channels
+ * that get mixed together. Each st_audio contains
+ * everything needed to synthesize a sound. If 'silence'
+ * is true, only zeros get written to audio. Only the
+ * 'volume' from the first st_audio is used to control
+ * audio. All variables should be set before playing a sound.
+ **/
+typedef struct st_audio {
+    bool        silence;
+    int         volume;   /*between 0 and 127*/
+    unsigned    i;        /*general incrementer*/
+    unsigned    note_nr;  /*increments the note in a tune*/
+    unsigned    sfx_nr;   /*ID of sound to play (see SFX* defines)*/
+    unsigned    attack;   /*ADSR length in samples*/
+    unsigned    decay;
+    unsigned    sustain;
+    unsigned    release;
+    unsigned    waveform; /*1 = square, 2 = saw, 3 = tri, * = sine*/
+    float       freq;     /*starting frequency*/
+    float       amp;      /*starting amplitude*/
+    float       env;      /*starting envelope (0 if attack is >0*/
+} st_audio;
+
 /*** resolution options ***/
 typedef struct resolution{
     int         width;
@@ -304,7 +349,9 @@ typedef struct resolution{
 /*** config options ***/
 typedef struct options {
     bool        physics_enabled;
+    bool        audio_enabled;
     bool        friendly_fire;
+    int         audio_volume;
     int         player_count;
     int         vsync;
     int         aster_max_count;
@@ -322,10 +369,12 @@ typedef struct options {
 /*** shared pointers ***/
 typedef struct st_shared {
     options        *config;
+    st_audio       *sfx_main;
     player        **plyr;
     asteroid      **aster;
     SDL_Window    **win_main;
     SDL_GLContext  *win_main_gl;
+    SDL_AudioDeviceID audio_device;
     unsigned       *current_timer;
     unsigned       *prev_timer;
     unsigned       *ten_second_timer;
@@ -469,6 +518,56 @@ void update_physics         (st_shared *phy);
  **/
 void draw_objects           (st_shared *draw);
 
+/* Audio stream callback.
+ *
+ *     data - st_audio array assigned to an audio spec
+ *     buffer - audio buffer to be filled
+ *     len - size of buffer in bytes
+ *
+ * This is called automatically by SDL to fill
+ * AUDIO_CALLBACK_BYTES worth of data to the audio buffer.
+ *
+ * Inside is a rough synthesizer that handles ADSR enveloping
+ * and different waveforms (sine, square, saw, triangle).
+ * Each "mix channel" is added together and normalized, then
+ * mixed through SDL_MixAudioFormat for volume control.
+ *
+ * To play a sound, find a free "mix channel"
+ *
+ *     for(i=0; i<AUDIO_MIX_CHANNELS; i++)
+ *         if(st_audio[i].silence)
+ *
+ * then set the elements of st_audio[i] to the sound to play
+ *
+ *     st_audio[i].sfx_nr   = <sfx to play>
+ *     st_audio[i].note_nr  = 0
+ *     st_audio[i].i        = 0
+ *     st_audio[i].waveform = <waveform to use>
+ *     st_audio[i].freq     = 0
+ *     st_audio[i].amp      = 1
+ *     st_audio[i].env      = <0 if attack != 0>
+ *     st_audio[i].attack   = <attack duration>
+ *     st_audio[i].decay    = <decay duration>
+ *     st_audio[i].sustain  = <sustain duration>
+ *     st_audio[i].release  = <release duration>
+ *     st_audio[i].silence  = false
+ **/
+void audio_fill_buffer      (void    *data,
+                             uint8_t *buffer,
+                             int      len);
+
+/* Get sample frequency.
+ *
+ *     d       - st_audio passed from audio_fill_buffer()
+ *     channel - "mix channel" to use
+ *
+ * This is only called internally by audio_fill_buffer().
+ * Contains sound effect "recipes" that return the frequency
+ * for the current sample.
+ **/
+float get_frequency         (st_audio *d,
+                             const int channel);
+
 int main                    (int    argc,
                              char **argv)
 {
@@ -494,13 +593,16 @@ int main                    (int    argc,
     SDL_Window     *win_main;
     SDL_GLContext   win_main_gl;
     st_shared       shared_vars;
+    st_audio        sfx_main[AUDIO_MIX_CHANNELS] = {
+        {true, 96, 0, 0, 0, 1, 1, 1, 1, 0, 0.f, 1.f, 1.f}};
     player         *plyr;
     asteroid       *aster;
     options         config           = { /*default config options.*/
-        true, true, 1, 1, 8, 3, 5, 1.f, 1.f,
-        1.f, 1.f, 0, {800,600,60}, {0,0,0}};
+        true, true, true, 96, 1, 1, 8, 3, 5, 1.f,
+        1.f, 1.f, 1.f, 0, {800,600,60}, {0,0,0}};
     /*make pointers to shared vars*/
     shared_vars.aster                = &aster;
+    shared_vars.audio_device         = 0;
     shared_vars.bottom_clip          = &bottom_clip;
     shared_vars.config               = &config;
     shared_vars.current_timer        = &current_timer;
@@ -516,6 +618,7 @@ int main                    (int    argc,
     shared_vars.plyr                 = &plyr;
     shared_vars.prev_timer           = &prev_timer;
     shared_vars.right_clip           = &right_clip;
+    shared_vars.sfx_main             = sfx_main;
     shared_vars.show_fps             = &show_fps;
     shared_vars.ten_second_timer     = &ten_second_timer;
     shared_vars.top_clip             = &top_clip;
@@ -569,6 +672,8 @@ int main                    (int    argc,
     }
 
     /*cleanup*/
+    if(config.audio_enabled)
+        SDL_CloseAudioDevice(shared_vars.audio_device);
     SDL_GL_DeleteContext(win_main_gl);
     SDL_DestroyWindow(win_main);
     SDL_Quit();
@@ -593,6 +698,8 @@ void print_sdl_version(void)
 void print_usage(void)
 {
     printf("\nUsage: asteroids [OPTIONS]\n\n");
+    printf("        -a         Enables audio playback.\n");
+    printf("        -A         Disables audio playback.\n");
     printf("        -b  SCALE  Sets asteroid size modifier. 'SCALE' is a number\n");
     printf("                   between 0.5 and 2. The default scale is 1.\n");
     printf("        -d         Disables asteroid collision physics.\n");
@@ -620,6 +727,8 @@ void print_usage(void)
     printf("        -s  VSYNC  Sets frame swap interval. 'VSYNC' can be on, off,\n");
     printf("                   or lateswap. The default is on.\n");
     printf("        -v         Print version info and exit.\n");
+    printf("        -V  VOL    Sets audio volume. 'VOL' is an integer between 0 and\n");
+    printf("                   127. The default is 96.\n");
     printf("        -w  SEC    Sets asteroid spawn timer in seconds. Can be an integer\n");
     printf("                   between 0 and 30, or 'off' to disable. The default is 5.\n\n");
     printf("'Simple Asteroids' uses a configuration file called 'asteroids.conf' that\n");
@@ -780,6 +889,11 @@ bool get_config_options(options *config)
         fprintf(config_file, "#full-res = 800x600\n");
         fprintf(config_file, "win-res = 800x600\n");
         fprintf(config_file, "vsync = on\n\n");
+        fprintf(config_file, "### Audio options\n");
+        fprintf(config_file, "# audio - Enables audio. Can be 'on' or 'off'. The default is 'on'.\n");
+        fprintf(config_file, "# volume - Audio volume. Can be between 0 and 127. The default is 96.\n");
+        fprintf(config_file, "audio = on\n");
+        fprintf(config_file, "volume = 96\n\n");
         fprintf(config_file, "### Multiplayer\n");
         fprintf(config_file, "# players       - Number of players. Can be from 1 to %d\n", PLAYER_MAX);
         fprintf(config_file, "# friendly-fire - Enables players to damage each other\n");
@@ -1038,6 +1152,31 @@ bool get_config_options(options *config)
                 }
             }
         }
+        else if(!strcmp(config_token, "audio"))         /*audio_enabled*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                if(!strcmp(config_token, "on"))
+                    config->audio_enabled = true;
+                if(!strcmp(config_token, "off"))
+                    config->audio_enabled = false;
+            }
+        }
+        else if(!strcmp(config_token, "volume"))        /*audio_volume*/
+        {
+            /*get second token*/
+            config_token = strtok(NULL, " =");
+            if(config_token)
+            {
+                i = atoi(config_token);
+                if(i > 0 && i < 128)
+                    config->audio_volume = i;
+                else
+                    fprintf(stderr, "Warning: In config file, 'volume' must be an integer between 0 and 127.\n");
+            }
+        }
     }
     fclose(config_file);
     return true;
@@ -1047,8 +1186,8 @@ bool parse_cmd_args(const int   argc,
                     char      **argv,
                     options    *config)
 {
-    int a_count = 8;
-    int i = 0;
+    int   i       = 0;
+    int   a_count = 8;
     float a_scale = 1.f;
     char *argv_token;
 
@@ -1360,6 +1499,30 @@ bool parse_cmd_args(const int   argc,
                        }
                    }
                    break;
+        /*-a enable audio*/
+        case 'a' : config->audio_enabled = true;
+                   break;
+        /*-A disable audio*/
+        case 'A' : config->audio_enabled = false;
+                   break;
+        /*-V audio volume*/
+        case 'V' : if(i+2 > argc)
+                   {
+                       fprintf(stderr, "Option -V requires a specifier\n");
+                       print_usage();
+                       return false;
+                   }
+                   a_count = atoi(argv[i+1]);
+                   if(a_count > 0 && a_count < 128)
+                       config->audio_volume = a_count;
+                   else
+                   {
+                       fprintf(stderr,
+                              "Volume must be an integer between 0 and 127\n");
+                       print_usage();
+                       return false;
+                   }
+                   break;
         default  : fprintf(stderr, "Invalid option '%s'\n", argv[i]);
                    print_usage();
                    return false;
@@ -1371,11 +1534,12 @@ bool parse_cmd_args(const int   argc,
 bool init_(st_shared *init)
 {
     int i,j,k;
-    unsigned object_buffers[] = {0,0};
-    const float rad_mod = M_PI/180.f;
+    unsigned        object_buffers[] = {0,0};
+    const float     rad_mod = M_PI/180.f;
     SDL_DisplayMode mode_current;
     SDL_DisplayMode mode_target;
     SDL_DisplayMode mode_default = {0,800,600,0,0};
+    SDL_AudioSpec   spec_target, spec_current;
 
     /*initialize players*/
     /*reserve memory for config.player_count players*/
@@ -1434,11 +1598,50 @@ bool init_(st_shared *init)
         }
     }
 
-    if(SDL_Init(SDL_INIT_VIDEO))
+    if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))
     {
         fprintf(stderr, "SDL Init: %s\n", SDL_GetError());
         return false;
     }
+    /*audio init*/
+    if(init->config->audio_enabled)
+    {
+        (init->sfx_main)[0].volume = init->config->audio_volume;
+        spec_target.freq = AUDIO_SAMPLE_RATE;
+        spec_target.format = AUDIO_S8;
+        spec_target.channels = 1;
+        spec_target.samples = AUDIO_CALLBACK_BYTES;
+        spec_target.callback = audio_fill_buffer;
+        spec_target.userdata = init->sfx_main;
+        init->audio_device = SDL_OpenAudioDevice(NULL, 0, &spec_target,
+                                                 &spec_current, 0);
+        if(!init->audio_device)
+        {
+            fprintf(stderr, "SDL Open Audio: Failed to open audio device.\n");
+            init->config->audio_enabled = false;
+        }
+        else if(spec_current.format != spec_target.format)
+        {
+            fprintf(stderr, "Couldn't get AUDIO_S8. Instead got AUDIO_");
+            if(SDL_AUDIO_ISFLOAT(spec_current.format))
+                fprintf(stderr, "F");
+            else if(SDL_AUDIO_ISSIGNED(spec_current.format))
+                fprintf(stderr, "S");
+            else
+                fprintf(stderr, "U");
+            if(spec_current.format & 0x08)
+                fprintf(stderr, "8");
+            else if(spec_current.format & 0x10)
+                fprintf(stderr, "16");
+            else if(spec_current.format & 0x20)
+                fprintf(stderr, "32");
+            fprintf(stderr, "\n");
+            SDL_CloseAudioDevice(init->audio_device);
+            init->config->audio_enabled = false;
+        }
+    }
+    if(init->config->audio_enabled)
+        SDL_PauseAudioDevice(init->audio_device, 0);
     /*find closest mode*/
     if(init->config->fullscreen)
     {
@@ -1554,9 +1757,32 @@ bool init_(st_shared *init)
     *init->bottom_clip = *init->bottom_clip * (*init->height_real/600.f);
     /*print info*/
     print_sdl_version();
-    printf("Display: %dx%d @%dHz\n", *init->width_real, *init->height_real,
+    printf("\nDisplay: %dx%d @%dHz", *init->width_real, *init->height_real,
             mode_current.refresh_rate);
-    printf("OpenGL version: %s\n\
+    if(init->config->audio_enabled)
+    {
+        printf("\n\nAudio  sample rate: %d\n\
+       channels: %hu\n\
+       buffer size: %hu samples - %u bytes\n",
+                spec_current.freq, spec_current.channels,
+                spec_current.samples, spec_current.size);
+        printf("       format: AUDIO_");
+        if(SDL_AUDIO_ISFLOAT(spec_current.format))
+            printf("F");
+        else if(SDL_AUDIO_ISSIGNED(spec_current.format))
+            printf("S");
+        else
+            printf("U");
+        if(spec_current.format & 0x08)
+            printf("8");
+        else if(spec_current.format & 0x10)
+            printf("16");
+        else if(spec_current.format & 0x20)
+            printf("32");
+    }
+    else
+        printf("\n\nAudio  disabled");
+    printf("\n\nOpenGL version: %s\n\
        shader: %s\n\
        vendor: %s\n\
        renderer: %s\n**********\n",
@@ -1627,6 +1853,22 @@ bool init_(st_shared *init)
     }
     /*get time in milliseconds*/
     *init->prev_timer = SDL_GetTicks();
+    /*play reset tune*/
+    if(init->config->audio_enabled)
+    {
+        (init->sfx_main)[0].sfx_nr   = SFX_TUNE(0);
+        (init->sfx_main)[0].note_nr  = 0;
+        (init->sfx_main)[0].i        = 0;
+        (init->sfx_main)[0].waveform = 2;
+        (init->sfx_main)[0].amp      = 1.f;
+        (init->sfx_main)[0].freq     = 1.f;
+        (init->sfx_main)[0].env      = 1.f;
+        (init->sfx_main)[0].attack   = 0;
+        (init->sfx_main)[0].decay    = 0;
+        (init->sfx_main)[0].sustain  = AUDIO_CALLBACK_BYTES*100;
+        (init->sfx_main)[0].release  = 0;
+        (init->sfx_main)[0].silence  = false;
+    }
     return true;
 }
 
@@ -1634,6 +1876,9 @@ void update_physics(st_shared *phy)
 {
     int         i,j,k,l;
     char        win_title[256]   = {'\0'};
+    bool        sound_player_hit = false;
+    bool        sound_aster_hit  = false;
+    bool        sound_reset      = false;
     bool        skip_remain_time = false;
     const float target_time      = 100.f/6.f; /*~16.67 ms*/
     const float rad_mod          = M_PI/180.f;
@@ -1873,6 +2118,7 @@ void update_physics(st_shared *phy)
                         {
                             (*phy->plyr)[l].died = true;
                             (*phy->plyr)[i].died = true;
+                            sound_player_hit     = true;
                         }
                     }
                 }
@@ -1898,7 +2144,10 @@ void update_physics(st_shared *phy)
                         if(detect_point_in_triangle(temp_point2[0],
                                     temp_point2[1],
                                     (*phy->plyr)[l].bounds))
+                        {
                             (*phy->plyr)[l].died = true;
+                            sound_player_hit     = true;
+                        }
                     }
                     /*check player point to asteroid triangle collision*/
                     for(i = 0; i < 6; i+=2)
@@ -1910,7 +2159,10 @@ void update_physics(st_shared *phy)
                                         (*phy->plyr)[l].bounds[i],
                                         (*phy->plyr)[l].bounds[i+1],
                                         (*phy->aster)[k].bounds_real[j]))
+                            {
                                 (*phy->plyr)[l].died = true;
+                                sound_player_hit     = true;
+                            }
                         }
                     }
                     /*check projectile collision*/
@@ -1938,6 +2190,7 @@ void update_physics(st_shared *phy)
                             cos((*phy->plyr)[l].rot*rad_mod);
                         /*other player is hit*/
                         (*phy->plyr)[i].died = true;
+                        sound_player_hit     = true;
                     }
                     /*check hit on asteroid*/
                     for(i = 0; i < 6; i++)
@@ -1952,6 +2205,7 @@ void update_physics(st_shared *phy)
                             sin((*phy->plyr)[l].rot*rad_mod);
                         (*phy->plyr)[l].shot.real_pos[1] = 0.04f *
                             cos((*phy->plyr)[l].rot*rad_mod);
+                        sound_aster_hit = true;
                         /*score*/
                         if((*phy->aster)[k].scale > /*ASTER_LARGE = 1 points*/
                                 (*phy->config).aster_scale *
@@ -2178,6 +2432,7 @@ void update_physics(st_shared *phy)
                         (*phy->plyr)[0].score, (*phy->plyr)[0].top_score,
                         (*phy->plyr)[1].score, (*phy->plyr)[1].top_score);
             SDL_SetWindowTitle(*phy->win_main,win_title);
+            sound_reset = true;
             /*reset players*/
             for(i = 0; i < (*phy->config).player_count; i++)
             {
@@ -2240,6 +2495,75 @@ void update_physics(st_shared *phy)
         }
         *phy->frame_time -= min_time; /*decrement remaining time*/
     } /*while(frame_time > 0.f)*/
+    /*play sounds*/
+    if(sound_player_hit && phy->config->audio_enabled)
+    {
+        for(i = 0; i < AUDIO_MIX_CHANNELS; i++)
+        {
+            if(!(phy->sfx_main)[i].silence)
+                continue;
+            (phy->sfx_main)[i].sfx_nr   = SFX_PLAYER_HIT;
+            (phy->sfx_main)[i].note_nr  = 0;
+            (phy->sfx_main)[i].i        = 0;
+            (phy->sfx_main)[i].waveform = 2;
+            (phy->sfx_main)[i].amp      = 1.f;
+            (phy->sfx_main)[i].freq     = 1.f;
+            (phy->sfx_main)[i].env      = 0.8f;
+            (phy->sfx_main)[i].attack   = 0;
+            (phy->sfx_main)[i].decay    = 0;
+            (phy->sfx_main)[i].sustain  = AUDIO_CALLBACK_BYTES*15;
+            (phy->sfx_main)[i].release  = AUDIO_CALLBACK_BYTES*10;
+            (phy->sfx_main)[i].silence  = false;
+            break;
+        }
+        sound_player_hit = false;
+    }
+    if(sound_aster_hit && phy->config->audio_enabled)
+    {
+        for(i = 0; i < AUDIO_MIX_CHANNELS; i++)
+        {
+            if(!(phy->sfx_main)[i].silence)
+                continue;
+            (phy->sfx_main)[i].sfx_nr   = SFX_ASTER_HIT;
+            (phy->sfx_main)[i].note_nr  = 0;
+            (phy->sfx_main)[i].i        = 0;
+            (phy->sfx_main)[i].waveform = 2;
+            (phy->sfx_main)[i].amp      = 1.f;
+            (phy->sfx_main)[i].freq     = 1.f;
+            (phy->sfx_main)[i].env      = 0.8f;
+            (phy->sfx_main)[i].attack   = 0;
+            (phy->sfx_main)[i].decay    = 0;
+            (phy->sfx_main)[i].sustain  = 0;
+            (phy->sfx_main)[i].release  = AUDIO_CALLBACK_BYTES*16;
+            (phy->sfx_main)[i].silence  = false;
+            break;
+        }
+        sound_aster_hit = false;
+    }
+    if(sound_reset && phy->config->audio_enabled)
+    {
+        #if 0
+        for(i = 0; i < AUDIO_MIX_CHANNELS; i++)
+        {
+            if(!(phy->sfx_main)[i].silence)
+                continue;
+            (phy->sfx_main)[i].sfx_nr   = SFX_TUNE(0);
+            (phy->sfx_main)[i].note_nr  = 0;
+            (phy->sfx_main)[i].i        = 0;
+            (phy->sfx_main)[i].waveform = 2;
+            (phy->sfx_main)[i].amp      = 1.f;
+            (phy->sfx_main)[i].freq     = 1.f;
+            (phy->sfx_main)[i].env      = 1.f;
+            (phy->sfx_main)[i].attack   = 0;
+            (phy->sfx_main)[i].decay    = 0;
+            (phy->sfx_main)[i].sustain  = AUDIO_CALLBACK_BYTES*100;
+            (phy->sfx_main)[i].release  = 0;
+            (phy->sfx_main)[i].silence  = false;
+            break;
+        }
+        #endif
+        sound_reset = false;
+    }
 }
 
 void poll_events(st_shared *ev)
@@ -2715,4 +3039,135 @@ bool detect_aster_collision(float aster_a[6][6],
             return true;
     }
     return false;
+}
+
+void audio_fill_buffer(void *data, uint8_t *buffer, int len)
+{
+    int       i,j;
+    int       sample;
+    st_audio *d = (st_audio*)data;
+    uint8_t   final_buffer[AUDIO_CALLBACK_BYTES] = {0};
+    float     tmp_buffer[AUDIO_CALLBACK_BYTES]   = {0.f};
+    float     normalizer = 1.f;
+    float     env_inc    = 1.f;
+
+    /*for each individual mix channel*/
+    for(j = 0; j < AUDIO_MIX_CHANNELS; j++)
+    {
+        if(d[j].silence) /*skip if no sound is set to play*/
+            continue;
+        /*get sample frequency*/
+        d[j].freq = get_frequency(d, j);
+        if(d[j].silence) /*skip if silence requested*/
+            continue;
+        /*envelope increments*/
+        if(d[j].attack > 0)
+            env_inc = (1.f - d[j].env) / (float)d[j].attack;
+        else if(d[j].decay > 0)
+            env_inc = (d[j].env - 0.8f) / (float)d[j].decay;
+        else if(d[j].release > 0)
+            env_inc = d[j].env / (float)d[j].release;
+        /*reset sample-time*/
+        sample = 0;
+        /*compute AUDIO_CALLBACK_BYTES worth of samples*/
+        for(i = 0; i < len; i++, sample++)
+        {
+            float time = (float)sample / (float)AUDIO_SAMPLE_RATE;
+            /*add sample to tmp buffer*/
+            if(d[j].waveform == 1)      /*square*/
+            {
+                if(sin(2.0f * M_PI * d[j].freq * time) > 0)
+                    tmp_buffer[i] += (d[j].amp * d[j].env) * 2.f;
+                else
+                    tmp_buffer[i] += 0.f;
+            }
+            else if(d[j].waveform == 2) /*sawtooth*/
+                tmp_buffer[i] += d[j].amp * d[j].env *
+                   (time*d[j].freq - floor(0.5f + time*d[j].freq) + 0.5f);
+            else if(d[j].waveform == 3) /*triangle*/
+                tmp_buffer[i] += d[j].amp * d[j].env *
+                   fabs(2.f * (time*d[j].freq - floor(0.5f + time*d[j].freq)));
+            else                        /*sine*/
+                tmp_buffer[i] += d[j].amp * d[j].env *
+                   0.5f * (sin(2.f * M_PI * d[j].freq * time) + 1.f);
+            /*step through ADSR*/
+            if(d[j].attack > 0)
+            {
+                d[j].env += env_inc;
+                (d[j].attack)--;
+            }
+            else if(d[j].decay > 0)
+            {
+                d[j].env -= env_inc;
+                (d[j].decay)--;
+            }
+            else if(d[j].sustain > 0)
+                (d[j].sustain)--;
+            else if(d[j].release > 0)
+            {
+                d[j].env -= env_inc;
+                (d[j].release)--;
+            }
+            else /*end of ADSR*/
+            {
+                d[j].silence = true;
+                break;
+            }
+        }
+    }
+    /*normalize to [0,255] (assume each sound is [0,1])*/
+    normalizer = 255.f/AUDIO_MIX_CHANNELS;
+    for(i = 0; i < len; i++)
+    {
+        tmp_buffer[i] *= normalizer;
+        final_buffer[i] = (uint8_t)tmp_buffer[i];
+    }
+    memset(buffer, 0, len);
+    SDL_MixAudioFormat(buffer, final_buffer, AUDIO_S8, len, d[0].volume);
+}
+
+float get_frequency(st_audio *d, const int channel)
+{
+    float freq = 0.f;
+
+    if(d[channel].sfx_nr < sizeof(tune_count)/sizeof(*tune_count)) /*tune*/
+    {
+        if(d[channel].i <
+                (unsigned)tune_timing[d[channel].sfx_nr][d[channel].note_nr])
+        {
+            freq = pow(2.f,
+                tune_index[d[channel].sfx_nr][d[channel].note_nr]/12.f) * 440;
+            (d[channel].i)++;
+        }
+        else if(d[channel].note_nr < tune_count[d[channel].sfx_nr] - 1)
+        {
+            (d[channel].note_nr)++;
+            d[channel].i = 0;
+        }
+        else
+            d[channel].silence = true;
+    }
+    else if(d[channel].sfx_nr == SFX_PLAYER_HIT) /*death sound*/
+    {
+        freq = ((float)(rand()%860))/(d[channel].i*0.08f);
+        (d[channel].i)++;
+        if(d[channel].i > 80)
+            d[channel].silence = true;
+    }
+    else if(d[channel].sfx_nr == SFX_ASTER_HIT) /*asteroid hit*/
+    {
+        unsigned offset = 0;
+        if(d[channel].i & 0x01)
+            offset = 80;
+        else
+            offset = 220;
+        freq = (double)(rand()%40 + offset);
+        (d[channel].i)++;
+        if(d[channel].i > 80)
+            d[channel].silence = true;
+    }
+    else
+        d[channel].silence = true;
+
+    return freq;
 }
