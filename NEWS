@@ -1,8 +1,18 @@
+2017-08-04 - Version 1.5.0 ***
+
+* Added synthesized sound effects
+* Added FPS indicator
+* Player velocity is no longer limited
+* Made asteroid spawn timer configurable
+* New command switches and config file options
+* (source) Reformatted ~80% of source code
+* Other optimizations and fixes
+
 2017-07-24 - Version 1.4.2 ***
 
 * (sort of) Implemented support for OSX and FreeBSD
 * Added "pause" feature
-* Fixed windowed mode not respecting user set resolution
+* Fixed collision hitbox inconsistencies
 
 2017-07-22 - Version 1.4.1 ***
 

@@ -61,8 +61,8 @@
 #include <time.h>
 
 #define ASTEROIDS_VER_MAJOR 1
-#define ASTEROIDS_VER_MINOR 4
-#define ASTEROIDS_VER_PATCH 2
+#define ASTEROIDS_VER_MINOR 5
+#define ASTEROIDS_VER_PATCH 0
 
 #ifndef M_PI
   #ifdef M_PIl
@@ -1878,7 +1878,6 @@ void update_physics(st_shared *phy)
     char        win_title[256]   = {'\0'};
     bool        sound_player_hit = false;
     bool        sound_aster_hit  = false;
-    bool        sound_reset      = false;
     bool        skip_remain_time = false;
     const float target_time      = 100.f/6.f; /*~16.67 ms*/
     const float rad_mod          = M_PI/180.f;
@@ -1977,21 +1976,6 @@ void update_physics(st_shared *phy)
                         cos((*phy->plyr)[i].rot*rad_mod)*
                         (min_time/target_time)*(min_time/target_time);
                 }
-                /*clamp velocity*/
-                #if 0
-                if((*phy->plyr)[i].vel[0] > 0.02f *(min_time/target_time)
-                        && min_time > 0.0001f)
-                   (*phy->plyr)[i].vel[0] = 0.02f *(min_time/target_time);
-                if((*phy->plyr)[i].vel[0] < -0.02f*(min_time/target_time)
-                        && min_time > 0.0001f)
-                   (*phy->plyr)[i].vel[0] = -0.02f*(min_time/target_time);
-                if((*phy->plyr)[i].vel[1] > 0.02f *(min_time/target_time)
-                        && min_time > 0.0001f)
-                   (*phy->plyr)[i].vel[1] = 0.02f *(min_time/target_time);
-                if((*phy->plyr)[i].vel[1] < -0.02f*(min_time/target_time)
-                        && min_time > 0.0001f)
-                   (*phy->plyr)[i].vel[1] = -0.02f*(min_time/target_time);
-                #endif
                 /*update position*/
                 (*phy->plyr)[i].pos[0] += (*phy->plyr)[i].vel[0];
                 (*phy->plyr)[i].pos[1] += (*phy->plyr)[i].vel[1];
@@ -2432,7 +2416,6 @@ void update_physics(st_shared *phy)
                         (*phy->plyr)[0].score, (*phy->plyr)[0].top_score,
                         (*phy->plyr)[1].score, (*phy->plyr)[1].top_score);
             SDL_SetWindowTitle(*phy->win_main,win_title);
-            sound_reset = true;
             /*reset players*/
             for(i = 0; i < (*phy->config).player_count; i++)
             {
@@ -2539,30 +2522,6 @@ void update_physics(st_shared *phy)
             break;
         }
         sound_aster_hit = false;
-    }
-    if(sound_reset && phy->config->audio_enabled)
-    {
-        #if 0
-        for(i = 0; i < AUDIO_MIX_CHANNELS; i++)
-        {
-            if(!(phy->sfx_main)[i].silence)
-                continue;
-            (phy->sfx_main)[i].sfx_nr   = SFX_TUNE(0);
-            (phy->sfx_main)[i].note_nr  = 0;
-            (phy->sfx_main)[i].i        = 0;
-            (phy->sfx_main)[i].waveform = 2;
-            (phy->sfx_main)[i].amp      = 1.f;
-            (phy->sfx_main)[i].freq     = 1.f;
-            (phy->sfx_main)[i].env      = 1.f;
-            (phy->sfx_main)[i].attack   = 0;
-            (phy->sfx_main)[i].decay    = 0;
-            (phy->sfx_main)[i].sustain  = AUDIO_CALLBACK_BYTES*100;
-            (phy->sfx_main)[i].release  = 0;
-            (phy->sfx_main)[i].silence  = false;
-            break;
-        }
-        #endif
-        sound_reset = false;
     }
 }
 
