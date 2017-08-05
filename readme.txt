@@ -8,19 +8,19 @@ Simple Asteroids
 
 Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.5
 
-Controls (1 player):
-  w,a,s,d    - Move around
-  space      - Shoot
-  p          - Pause
-  escape     - Quit
-
-Controls (2 players):
-  w,a,s,d    - Move around (player 1)
-  tab        - Shoot (player 1)
-  arrow keys - Move around (player 2)
-  right ctrl - Shoot (player 2)
-  p          - Pause
-  escape     - Quit
+Controls:
+    p            - Pause
+    backtick (`) - FPS indicator
+    brackets []  - Adjust volume
+    escape       - Quit
+1 Player:
+    w,a,s,d      - Move around
+    space        - Shoot
+2 Players:
+    w,a,s,d      - Move around (player 1)
+    tab          - Shoot (player 1)
+    arrow keys   - Move around (player 2)
+    right ctrl   - Shoot (player 2)
 
 Run the program with '-h' for command line options.
 

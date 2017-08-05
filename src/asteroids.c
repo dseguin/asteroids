@@ -2596,6 +2596,18 @@ void poll_events(st_shared *ev)
                 else
                    *ev->show_fps   = true;
             }
+            else if(event_main.key.keysym.scancode == SDL_SCANCODE_LEFTBRACKET)
+            {
+                (ev->sfx_main)[0].volume -= 5;
+                if((ev->sfx_main)[0].volume < 0)
+                    (ev->sfx_main)[0].volume = 0;
+            }
+            else if(event_main.key.keysym.scancode == SDL_SCANCODE_RIGHTBRACKET)
+            {
+                (ev->sfx_main)[0].volume += 5;
+                if((ev->sfx_main)[0].volume > 127)
+                    (ev->sfx_main)[0].volume = 127;
+            }
             else if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
                 (*ev->plyr)[0].key_forward  = true;
             else if(event_main.key.keysym.scancode == SDL_SCANCODE_S)
