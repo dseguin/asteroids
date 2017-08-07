@@ -28,15 +28,8 @@
  *
  *****************************************************************************/
 
-#ifdef _WIN32
-  #include <Windows.h>
-  #include <gl/GL.h>
-  #include <SDL.h>
-#else
-  #include <GL/gl.h>
-  #include <SDL2/SDL.h>
-#endif
-
+#include <GL/gl.h>
+#include <SDL.h>
 #include "global.h"
 #include "shared.h"
 

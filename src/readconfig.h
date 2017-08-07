@@ -32,7 +32,33 @@
 #define READCONFIG_H
 
 #include "global.h"
-#include "shared.h"
+
+/*** resolution options ***/
+typedef struct resolution{
+    int         width;
+    int         height;
+    int         refresh;
+} resolution;
+
+/*** config options ***/
+typedef struct options {
+    bool        physics_enabled;
+    bool        audio_enabled;
+    bool        friendly_fire;
+    int         audio_volume;
+    int         player_count;
+    int         vsync;
+    int         aster_max_count;
+    int         aster_init_count;
+    unsigned    spawn_timer;
+    float       aster_scale;
+    float       aster_mass_large;
+    float       aster_mass_med;
+    float       aster_mass_small;
+    int         fullscreen;
+    resolution  winres;
+    resolution  fullres;
+} options;
 
 /* Get configuration settings.
  *

@@ -28,18 +28,12 @@
  *
  *****************************************************************************/
 
+#include <GL/gl.h>
+#include <SDL.h>
 #ifdef _WIN32
-  #include <Windows.h>
-  #include <gl/GL.h>
-  #include <SDL.h>
   #include <SDL_opengl_glext.h>
-  #include <SDL_revision.h>
-#else
-  #include <GL/gl.h>
-  #include <SDL2/SDL.h>
-  #include <SDL2/SDL_revision.h>
 #endif
-
+#include <SDL_revision.h>
 #include <stdio.h>
 #include <time.h>
 #include "global.h"

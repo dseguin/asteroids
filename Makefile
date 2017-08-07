@@ -11,16 +11,15 @@ TARGET := $(TARGETDIR)/asteroids
 SRCEXT := c
 SOURCES := asteroids.c readconfig.c audio.c collision.c render.c init.c event.c
 OBJECTS := $(BUILDDIR)/asteroids.o $(BUILDDIR)/readconfig.o $(BUILDDIR)/audio.o $(BUILDDIR)/collision.o $(BUILDDIR)/render.o $(BUILDDIR)/init.o $(BUILDDIR)/event.o
-DEBUGFLAGS := -Wall -Wextra -pedantic -Wfatal-errors \
-	-Wformat=2 -Wswitch-default -Wswitch-enum \
-	-Wcast-align -Wpointer-arith -Wbad-function-cast -Wstrict-overflow=5 \
-	-Wstrict-prototypes -Winline -Wundef -Wnested-externs -Wcast-qual -Wshadow \
-	-Wunreachable-code -Wlogical-op -Wfloat-equal -Wredundant-decls \
-	-Wold-style-definition -ggdb3 -O0 -fno-omit-frame-pointer \
-	-ffloat-store -fno-common -fstrict-aliasing
+DEBUGFLAGS := -Wall -Wextra -pedantic -Werror -Wfatal-errors -Wformat=2 \
+	-Wswitch-enum -Wcast-align -Wpointer-arith -Wbad-function-cast \
+	-Wstrict-overflow=5 -Wstrict-prototypes -Winline -Wundef -Wnested-externs \
+	-Wcast-qual -Wshadow -Wunreachable-code -Wlogical-op -Wfloat-equal \
+	-Wredundant-decls -Wold-style-definition -ggdb3 -O0 \
+	-fno-omit-frame-pointer -ffloat-store -fno-common -fstrict-aliasing
 RELEASEFLAGS := -O2 -Wall -Wl,--strip-all
 LIB := -lm -lSDL2 -lGL
-INC := -Iinclude
+INC := -Iinclude `sdl2-config --cflags`
 
 all: | c89 debug-flag makedirs $(OBJECTS) $(TARGET)
 

@@ -29,13 +29,9 @@
  *****************************************************************************/
 
 #ifdef _WIN32
-  #include <Windows.h>
-  #include <SDL.h>
   #pragma comment(lib, "opengl32.lib")
-#else
-  #include <SDL2/SDL.h>
 #endif
-
+#include <SDL.h>
 #include <stdio.h>
 #include "readconfig.h"
 #include "init.h"

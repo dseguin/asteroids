@@ -30,8 +30,6 @@
 
 #ifdef _WIN32
   #include <Windows.h>
-  #include <SDL_version.h>
-  #include <SDL_revision.h>
   #define CONFIG_FS_DELIMIT '\\'
 #else
   #ifdef __APPLE__
@@ -41,45 +39,21 @@
     #include <sys/types.h>
     #include <sys/sysctl.h>
   #endif
-  #if defined __linux__ && (!defined _POSIX_C_SOURCE || !(_POSIX_C_SOURCE >= 200112L))
-    #define _POSIX_C_SOURCE 200112L /*needed for readlink()*/
+  #ifdef __linux__
+    #if !defined _POSIX_C_SOURCE || !(_POSIX_C_SOURCE >= 200112L)
+      #define _POSIX_C_SOURCE 200112L /*needed for readlink()*/
+    #endif
+    #include <unistd.h>
   #endif
-  #include <SDL2/SDL_version.h>
-  #include <SDL2/SDL_revision.h>
-  #include <unistd.h>
   #define CONFIG_FS_DELIMIT '/'
 #endif
 
+#include <SDL_version.h>
+#include <SDL_revision.h>
 #include <stdio.h>
 #include "global.h"
+#include "readconfig.h"
 #define CONF_LINE_MAX   128
-
-/*** resolution options ***/
-typedef struct resolution{
-    int         width;
-    int         height;
-    int         refresh;
-} resolution;
-
-/*** config options ***/
-typedef struct options {
-    bool        physics_enabled;
-    bool        audio_enabled;
-    bool        friendly_fire;
-    int         audio_volume;
-    int         player_count;
-    int         vsync;
-    int         aster_max_count;
-    int         aster_init_count;
-    unsigned    spawn_timer;
-    float       aster_scale;
-    float       aster_mass_large;
-    float       aster_mass_med;
-    float       aster_mass_small;
-    int         fullscreen;
-    resolution  winres;
-    resolution  fullres;
-} options;
 
 /* Print help text */
 void print_usage(void)

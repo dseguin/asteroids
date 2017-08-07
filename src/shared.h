@@ -31,6 +31,8 @@
 #ifndef SHARED_H
 #define SHARED_H
 
+#include "readconfig.h"
+
 /*** asteroid object ***
  *
  * Each asteroid is a line loop with a non-convex shape.
@@ -105,33 +107,6 @@ typedef struct st_audio {
     float       amp;      /*starting amplitude*/
     float       env;      /*starting envelope (0 if attack is >0*/
 } st_audio;
-
-/*** resolution options ***/
-typedef struct resolution{
-    int         width;
-    int         height;
-    int         refresh;
-} resolution;
-
-/*** config options ***/
-typedef struct options {
-    bool        physics_enabled;
-    bool        audio_enabled;
-    bool        friendly_fire;
-    int         audio_volume;
-    int         player_count;
-    int         vsync;
-    int         aster_max_count;
-    int         aster_init_count;
-    unsigned    spawn_timer;
-    float       aster_scale;
-    float       aster_mass_large;
-    float       aster_mass_med;
-    float       aster_mass_small;
-    int         fullscreen;
-    resolution  winres;
-    resolution  fullres;
-} options;
 
 /*** shared pointers ***/
 typedef struct st_shared {

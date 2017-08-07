@@ -28,12 +28,7 @@
  *
  *****************************************************************************/
 
-#ifdef _WIN32
-  #include <SDL_audio.h>
-#else
-  #include <SDL2/SDL_audio.h>
-#endif
-
+#include <SDL_audio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
