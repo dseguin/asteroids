@@ -156,6 +156,7 @@ typedef struct st_shared {
     float          *frame_time;
     char           *fps;
     char           *mspf;
+    bool            legacy_context;
     bool           *paused;
     bool           *show_fps;
     bool           *loop_exit;

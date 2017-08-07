@@ -85,6 +85,7 @@ int main                    (int    argc,
     shared_vars.frame_time           = &frame_time;
     shared_vars.height_real          = &height_real;
     shared_vars.left_clip            = &left_clip;
+    shared_vars.legacy_context       = false;
     shared_vars.loop_exit            = &loop_exit;
     shared_vars.mspf                 = mspf;
     shared_vars.paused               = &paused;

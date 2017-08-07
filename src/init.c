@@ -344,24 +344,32 @@ bool init_(st_shared *init)
     /*fetch GL extension functions*/
     if(!SDL_GL_ExtensionSupported("GL_ARB_vertex_buffer_object"))
     {
-        fprintf(stderr, "GL_ARB_vertex_buffer_object not supported\n");
-        return 1;
+        fprintf(stderr, "GL_ARB_vertex_buffer_object not supported. Using OpenGL 1.1 legacy context.\n");
+        init->legacy_context = true;
     }
-    *(void **) (&glGenBuffersARB_ptr) =
-        SDL_GL_GetProcAddress("glGenBuffersARB");
-    *(void **) (&glBindBufferARB_ptr) =
-        SDL_GL_GetProcAddress("glBindBufferARB");
-    *(void **) (&glBufferDataARB_ptr) =
-        SDL_GL_GetProcAddress("glBufferDataARB");
-    /*** Buffer Objects ***/
-    glGenBuffersARB_ptr(2, object_buffers);
-    glBindBufferARB_ptr(GL_ARRAY_BUFFER, object_buffers[0]);
-    glBufferDataARB_ptr(GL_ARRAY_BUFFER, sizeof(object_verts),
-            object_verts, GL_STATIC_DRAW);
-    glBindBufferARB_ptr(GL_ELEMENT_ARRAY_BUFFER, object_buffers[1]);
-    glBufferDataARB_ptr(GL_ELEMENT_ARRAY_BUFFER, sizeof(object_index),
-            object_index, GL_STATIC_DRAW);
-    glInterleavedArrays(GL_V2F, 0, (void*)(intptr_t)(0));
+    if(!init->legacy_context)
+    {
+        *(void **) (&glGenBuffersARB_ptr) =
+            SDL_GL_GetProcAddress("glGenBuffersARB");
+        *(void **) (&glBindBufferARB_ptr) =
+            SDL_GL_GetProcAddress("glBindBufferARB");
+        *(void **) (&glBufferDataARB_ptr) =
+            SDL_GL_GetProcAddress("glBufferDataARB");
+        /*** Buffer Objects ***/
+        glGenBuffersARB_ptr(2, object_buffers);
+        glBindBufferARB_ptr(GL_ARRAY_BUFFER, object_buffers[0]);
+        glBufferDataARB_ptr(GL_ARRAY_BUFFER, sizeof(object_verts),
+                object_verts, GL_STATIC_DRAW);
+        glBindBufferARB_ptr(GL_ELEMENT_ARRAY_BUFFER, object_buffers[1]);
+        glBufferDataARB_ptr(GL_ELEMENT_ARRAY_BUFFER, sizeof(object_index),
+                object_index, GL_STATIC_DRAW);
+        glInterleavedArrays(GL_V2F, 0, (void*)(intptr_t)(0));
+    }
+    else
+    {
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glVertexPointer(2, GL_FLOAT, 0, object_verts);
+    }
 
     /*set RNG and spawn 3 asteroids*/
     srand((unsigned)time(NULL));

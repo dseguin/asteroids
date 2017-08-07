@@ -704,10 +704,10 @@ void update_physics(st_shared *phy)
             /*update scoreboard/window title*/
             if((*phy->config).player_count == 1) /*1 player*/
                 sprintf(win_title,
-                        "Simple Asteroids - Score: %d - Top Score: %d",
+                        "Simple Asteroids - Score: %u - Top Score: %u",
                         (*phy->plyr)[0].score, (*phy->plyr)[0].top_score);
             else                         /*2 players*/
-                sprintf(win_title, "Simple Asteroids - PLAYER1 Score: %d  Top Score: %d / PLAYER2 Score: %d  Top Score: %d",
+                sprintf(win_title, "Simple Asteroids - PLAYER1 Score: %u  Top Score: %u / PLAYER2 Score: %u  Top Score: %u",
                         (*phy->plyr)[0].score, (*phy->plyr)[0].top_score,
                         (*phy->plyr)[1].score, (*phy->plyr)[1].top_score);
             SDL_SetWindowTitle(*phy->win_main,win_title);

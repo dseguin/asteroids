@@ -41,6 +41,7 @@
 #include "shared.h"
 
 extern const unsigned char object_element_count[];
+extern const unsigned char object_index[];
 extern const unsigned object_index_offsets[];
 
 void draw_objects(st_shared *draw)
@@ -71,10 +72,16 @@ void draw_objects(st_shared *draw)
             glScalef((*draw->aster)[i].scale,(*draw->aster)[i].scale,1.f);
             glRotatef((*draw->aster)[i].rot, 0.f, 0.f, -1.f);
             /*draw asteroid 'i'*/
-            glDrawElements(GL_LINE_LOOP,
-                           object_element_count[5],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[2]);
+            if(draw->legacy_context)
+                glDrawElements(GL_LINE_LOOP,
+                        object_element_count[5],
+                        GL_UNSIGNED_BYTE,
+                        &object_index[object_index_offsets[2]]);
+            else
+                glDrawElements(GL_LINE_LOOP,
+                        object_element_count[5],
+                        GL_UNSIGNED_BYTE,
+                        (void*)(intptr_t)object_index_offsets[2]);
             glPopMatrix();
         }
     }
@@ -86,19 +93,31 @@ void draw_objects(st_shared *draw)
         if(!(*draw->plyr)[i].died) /*still alive*/
         {
             glRotatef((*draw->plyr)[i].rot, 0.f, 0.f, -1.f);
-            glDrawElements(GL_LINE_LOOP,
-                           object_element_count[1],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[0]);
+            if(draw->legacy_context)
+                glDrawElements(GL_LINE_LOOP,
+                        object_element_count[1],
+                        GL_UNSIGNED_BYTE,
+                        &object_index[object_index_offsets[0]]);
+            else
+                glDrawElements(GL_LINE_LOOP,
+                        object_element_count[1],
+                        GL_UNSIGNED_BYTE,
+                        (void*)(intptr_t)object_index_offsets[0]);
             /*projectile*/
             if((*draw->plyr)[i].key_shoot && !*draw->paused)
             {
                 glTranslatef((*draw->plyr)[i].shot.pos[0],
                              (*draw->plyr)[i].shot.pos[1], 0.f);
-                glDrawElements(GL_LINES,
-                               object_element_count[3],
-                               GL_UNSIGNED_BYTE,
-                               (void*)(intptr_t)object_index_offsets[1]);
+                if(draw->legacy_context)
+                    glDrawElements(GL_LINES,
+                            object_element_count[3],
+                            GL_UNSIGNED_BYTE,
+                            &object_index[object_index_offsets[1]]);
+                else
+                    glDrawElements(GL_LINES,
+                            object_element_count[3],
+                            GL_UNSIGNED_BYTE,
+                            (void*)(intptr_t)object_index_offsets[1]);
             }
         }
         else /*player death effect*/
@@ -106,19 +125,31 @@ void draw_objects(st_shared *draw)
             glPushMatrix();
             glScalef((*draw->plyr)[i].blast_scale,
                      (*draw->plyr)[i].blast_scale, 1.f);
-            glDrawElements(GL_LINES,
-                           object_element_count[7],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[3]);
+            if(draw->legacy_context)
+                glDrawElements(GL_LINES,
+                        object_element_count[7],
+                        GL_UNSIGNED_BYTE,
+                        &object_index[object_index_offsets[3]]);
+            else
+                glDrawElements(GL_LINES,
+                        object_element_count[7],
+                        GL_UNSIGNED_BYTE,
+                        (void*)(intptr_t)object_index_offsets[3]);
             glPopMatrix();
             /*draw second smaller effect at 90 degree rotation*/
             glScalef((*draw->plyr)[i].blast_scale*0.5f,
                      (*draw->plyr)[i].blast_scale*0.5f, 1.f);
             glRotatef(90.f, 0.f, 0.f, -1.f);
-            glDrawElements(GL_LINES,
-                           object_element_count[7],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[3]);
+            if(draw->legacy_context)
+                glDrawElements(GL_LINES,
+                        object_element_count[7],
+                        GL_UNSIGNED_BYTE,
+                        &object_index[object_index_offsets[3]]);
+            else
+                glDrawElements(GL_LINES,
+                        object_element_count[7],
+                        GL_UNSIGNED_BYTE,
+                        (void*)(intptr_t)object_index_offsets[3]);
         }
         glPopMatrix();
     }
@@ -141,10 +172,16 @@ void draw_objects(st_shared *draw)
                 tmp_char = p1_score[i] - 0x32; /* A-Z */
             else
                 break;
-            glDrawElements(GL_LINE_STRIP,
-                           object_element_count[(tmp_char*2)-1],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+            if(draw->legacy_context)
+                glDrawElements(GL_LINE_STRIP,
+                        object_element_count[(tmp_char*2)-1],
+                        GL_UNSIGNED_BYTE,
+                        &object_index[object_index_offsets[tmp_char-1]]);
+            else
+                glDrawElements(GL_LINE_STRIP,
+                        object_element_count[(tmp_char*2)-1],
+                        GL_UNSIGNED_BYTE,
+                        (void*)(intptr_t)object_index_offsets[tmp_char-1]);
         }
         glTranslatef(0.06f, 0.f, 0.f);
     }
@@ -167,18 +204,24 @@ void draw_objects(st_shared *draw)
                 tmp_char = p1_topscore[i] - 0x32;
             else
                 break;
-            glDrawElements(GL_LINE_STRIP,
-                           object_element_count[(tmp_char*2)-1],
-                           GL_UNSIGNED_BYTE,
-                           (void*)(intptr_t)object_index_offsets[tmp_char-1]);
+            if(draw->legacy_context)
+                glDrawElements(GL_LINE_STRIP,
+                        object_element_count[(tmp_char*2)-1],
+                        GL_UNSIGNED_BYTE,
+                        &object_index[object_index_offsets[tmp_char-1]]);
+            else
+                glDrawElements(GL_LINE_STRIP,
+                        object_element_count[(tmp_char*2)-1],
+                        GL_UNSIGNED_BYTE,
+                        (void*)(intptr_t)object_index_offsets[tmp_char-1]);
         }
         glTranslatef(0.06f, 0.f, 0.f);
     }
     glPopMatrix();
     if((*draw->config).player_count > 1)
     {
-        sprintf(p2_score,    "SCORE     %d", (*draw->plyr)[1].score);
-        sprintf(p2_topscore, "HI SCORE  %d", (*draw->plyr)[1].top_score);
+        sprintf(p2_score,    "SCORE     %u", (*draw->plyr)[1].score);
+        sprintf(p2_topscore, "HI SCORE  %u", (*draw->plyr)[1].top_score);
         glPushMatrix(); /*P2 SCORE*/
         glTranslatef(*draw->right_clip - 7.f*0.06f - 0.02f,
                      *draw->top_clip - 0.02f, 0.f);
@@ -198,7 +241,13 @@ void draw_objects(st_shared *draw)
                     tmp_char = p2_score[i] - 0x32;
                 else
                     break;
-                glDrawElements(GL_LINE_STRIP,
+                if(draw->legacy_context)
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            &object_index[object_index_offsets[tmp_char-1]]);
+                else
+                    glDrawElements(GL_LINE_STRIP,
                             object_element_count[(tmp_char*2)-1],
                             GL_UNSIGNED_BYTE,
                             (void*)(intptr_t)object_index_offsets[tmp_char-1]);
@@ -225,7 +274,13 @@ void draw_objects(st_shared *draw)
                     tmp_char = p2_topscore[i] - 0x32;
                 else
                     break;
-                glDrawElements(GL_LINE_STRIP,
+                if(draw->legacy_context)
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            &object_index[object_index_offsets[tmp_char-1]]);
+                else
+                    glDrawElements(GL_LINE_STRIP,
                             object_element_count[(tmp_char*2)-1],
                             GL_UNSIGNED_BYTE,
                             (void*)(intptr_t)object_index_offsets[tmp_char-1]);
@@ -254,7 +309,13 @@ void draw_objects(st_shared *draw)
                     tmp_char = pause_msg[i] - 0x32;
                 else
                     break;
-                glDrawElements(GL_LINE_STRIP,
+                if(draw->legacy_context)
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            &object_index[object_index_offsets[tmp_char-1]]);
+                else
+                    glDrawElements(GL_LINE_STRIP,
                             object_element_count[(tmp_char*2)-1],
                             GL_UNSIGNED_BYTE,
                             (void*)(intptr_t)object_index_offsets[tmp_char-1]);
@@ -290,7 +351,13 @@ void draw_objects(st_shared *draw)
                 }
                 else
                     break;
-                glDrawElements(GL_LINE_STRIP,
+                if(draw->legacy_context)
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            &object_index[object_index_offsets[tmp_char-1]]);
+                else
+                    glDrawElements(GL_LINE_STRIP,
                             object_element_count[(tmp_char*2)-1],
                             GL_UNSIGNED_BYTE,
                             (void*)(intptr_t)object_index_offsets[tmp_char-1]);
@@ -328,7 +395,13 @@ void draw_objects(st_shared *draw)
                 }
                 else
                     break;
-                glDrawElements(GL_LINE_STRIP,
+                if(draw->legacy_context)
+                    glDrawElements(GL_LINE_STRIP,
+                            object_element_count[(tmp_char*2)-1],
+                            GL_UNSIGNED_BYTE,
+                            &object_index[object_index_offsets[tmp_char-1]]);
+                else
+                    glDrawElements(GL_LINE_STRIP,
                             object_element_count[(tmp_char*2)-1],
                             GL_UNSIGNED_BYTE,
                             (void*)(intptr_t)object_index_offsets[tmp_char-1]);
