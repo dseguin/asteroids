@@ -9,8 +9,8 @@ TARGETDIR := bin
 TARGET := $(TARGETDIR)/asteroids
 
 SRCEXT := c
-SOURCES := asteroids.c
-OBJECTS := $(BUILDDIR)/asteroids.o
+SOURCES := asteroids.c readconfig.c audio.c collision.c render.c init.c event.c
+OBJECTS := $(BUILDDIR)/asteroids.o $(BUILDDIR)/readconfig.o $(BUILDDIR)/audio.o $(BUILDDIR)/collision.o $(BUILDDIR)/render.o $(BUILDDIR)/init.o $(BUILDDIR)/event.o
 DEBUGFLAGS := -Wall -Wextra -pedantic -Wfatal-errors \
 	-Wformat=2 -Wswitch-default -Wswitch-enum \
 	-Wcast-align -Wpointer-arith -Wbad-function-cast -Wstrict-overflow=5 \
