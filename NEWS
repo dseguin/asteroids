@@ -1,3 +1,9 @@
+2017-08-07 - Version 1.5.1 ***
+
+* Use legacy context for systems that only support OpenGL 1.1
+* Fixed console window showing up on Windows
+* (source) Split project into several smaller files
+
 2017-08-04 - Version 1.5.0 ***
 
 * Added synthesized sound effects
