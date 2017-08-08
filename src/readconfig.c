@@ -127,6 +127,7 @@ bool get_config_options(options *config)
 
     #ifdef _WIN32
 
+    char     bin_path_tmp[FILENAME_MAX];
     unsigned bin_path_len = 0;
     /*get path to executable*/
     /*to reduce code separation, this assumes that TCHAR == char*/
@@ -219,6 +220,18 @@ bool get_config_options(options *config)
            return false;
         }
     }
+    #ifdef _WIN32
+    /*redirect stderr/stdout to file*/
+    if(bin_path_len + 11 < FILENAME_MAX)
+    {
+        strcpy(bin_path_tmp, bin_path);
+        strcat(bin_path_tmp, "stdout.txt");
+        freopen(bin_path_tmp, "w", stdout);
+        strcpy(bin_path_tmp, bin_path);
+        strcat(bin_path_tmp, "stderr.txt");
+        freopen(bin_path_tmp, "w", stderr);
+    }
+    #endif
     /*Append config filename to bin_path*/
     if(bin_path_len + sizeof(config_name) >= FILENAME_MAX)
     {

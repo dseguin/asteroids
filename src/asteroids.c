@@ -28,10 +28,11 @@
  *
  *****************************************************************************/
 
+#include <SDL.h>
 #ifdef _WIN32
+  #include <SDL_main.h>
   #pragma comment(lib, "opengl32.lib")
 #endif
-#include <SDL.h>
 #include <stdio.h>
 #include "readconfig.h"
 #include "init.h"
