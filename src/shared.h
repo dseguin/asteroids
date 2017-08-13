@@ -28,19 +28,26 @@
  *
  *****************************************************************************/
 
+/**
+ * \file shared.h
+ * \brief Shared variables and structs
+ */
+
 #ifndef SHARED_H
 #define SHARED_H
 
+#include <SDL.h>
 #include "readconfig.h"
 
-/*** asteroid object ***
+/** \ingroup object
+ * \brief Asteroid object
  *
  * Each asteroid is a line loop with a non-convex shape.
  * To get even remotely accurate bounds detection, each
  * asteroid is divided into 6 triangles.
  * We only calculate physics and draw the asteroid if it
  * is spawned.
- **/
+ */
 typedef struct asteroid {
     int         is_spawned;
     int         collided; /*ID of colliding asteroid*/
@@ -54,17 +61,20 @@ typedef struct asteroid {
     float       bounds_real[6][6]; /*bounding triangles*/
 } asteroid;
 
-/*** projectile object ***/
+/** \ingroup object
+ * \brief Projectile object
+ */
 typedef struct projectile {
     float       pos[2];      /*distance from player*/
     float       real_pos[2]; /*position in relation to player*/
 } projectile;
 
-/*** player object ***
+/** \ingroup object
+ * \brief Player object
  *
  * Each player is a line loop that is treated as a
  * triangle for simpler collision detection.
- **/
+ */
 typedef struct player {
     bool        died;
     bool        blast_reset; /*false = turn blast effect off*/
@@ -83,7 +93,8 @@ typedef struct player {
     projectile  shot;
 } player;
 
-/*** SFX channel ***
+/** \ingroup audio
+ * \brief SFX channel
  *
  * An array of st_audio represents different audio channels
  * that get mixed together. Each st_audio contains
@@ -91,7 +102,7 @@ typedef struct player {
  * is true, only zeros get written to audio. Only the
  * 'volume' from the first st_audio is used to control
  * audio. All variables should be set before playing a sound.
- **/
+ */
 typedef struct st_audio {
     bool        silence;
     int         volume;   /*between 0 and 127*/
@@ -108,7 +119,9 @@ typedef struct st_audio {
     float       env;      /*starting envelope (0 if attack is >0*/
 } st_audio;
 
-/*** shared pointers ***/
+/**
+ * \brief Shared pointers
+ */
 typedef struct st_shared {
     options        *config;
     st_audio       *sfx_main;

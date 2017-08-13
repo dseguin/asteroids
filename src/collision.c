@@ -28,6 +28,10 @@
  *
  *****************************************************************************/
 
+/**
+ * \file collision.c
+ */
+
 #include <SDL.h>
 #include <math.h>
 #include "global.h"
@@ -38,13 +42,14 @@ extern const float aster_bounds[][6];
 extern const float object_verts[];
 extern const unsigned char object_element_count[];
 
-/* Detect if a point is in a triangle.
+/** \ingroup collision
+ * \brief Detect if a point is in a triangle
  *
- *     px        -  x component of point
- *     py        -  y component of point
- *     triangle  -  bounding triangle, given as an array of 6 floats
+ * \param px        -  x component of point
+ * \param py        -  y component of point
+ * \param triangle  -  bounding triangle, given as an array of 6 floats
  *
- * Returns 1 if the point is in the triangle, 0 if otherwise.
+ * \return \b 1 if the point is in the triangle, \b 0 if otherwise.
  **/
 int detect_point_in_triangle(const float  px,
                              const float  py,
@@ -86,21 +91,24 @@ int detect_point_in_triangle(const float  px,
         return 0;
 }
 
-/* Get the transformed coords of a point.
+/** \ingroup collision
+ * \brief Get the transformed coords of a point
  *
- *     original_vector - {x,y} vector of a point on an object
- *     real_pos        - {x,y} vector to pass the result
- *     trans           - {x,y} translation vector
- *     scale           - scaling factor
- *     rot             - rotation in degrees
+ * \param original_vector - {x,y} vector of a point on an object
+ * \param real_pos        - {x,y} vector to pass the result
+ * \param trans           - {x,y} translation vector
+ * \param scale           - scaling factor
+ * \param rot             - rotation in degrees
  *
  * The assumed transformation order is rotation first,
  * then scaling, then translation. Remember that OpenGL
  * transformation matrices operate in reverse order, ie.:
+ *     \code{.c}
  *     glTranslatef();
  *     glScalef();
  *     glRotatef();
  *     glDrawElements();
+ *     \endcode
  * would draw the object starting with a rotation and ending
  * with a translation.
  **/
@@ -117,14 +125,15 @@ void get_real_point_pos(const float *original_vector,
                    original_vector[1]*cos(rot*-rad_mod)) * scale + trans[1];
 }
 
-/* Detect if two asteroids have collided.
+/** \ingroup collision
+ * \brief Detect if two asteroids have collided.
  *
- *     aster_a - bounding triangles, 6x6 float matrix
- *     aster_b - bounding triangles, 6x6 float matrix
+ * \param aster_a - bounding triangles, 6x6 float matrix
+ * \param aster_b - bounding triangles, 6x6 float matrix
+ * \return \b true if the asteroids intersect, \b false if otherwise.
  *
  * Checks each point of asteroid A with each bounding triangle
- * of asteroid B. Returns true if the asteroids intersect, false
- * if otherwise.
+ * of asteroid B.
  **/
 bool detect_aster_collision(float aster_a[6][6],
                             float aster_b[6][6])

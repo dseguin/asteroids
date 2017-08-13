@@ -6,7 +6,7 @@ Simple Asteroids
   Copyright (c) 2017 David Seguin <davidseguin@live.ca>
   MIT License (see asteroids.c for license text)
 
-Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.1
+Simple 'Asteroids' clone written in C using SDL and OpenGL
 
 Controls:
     p            - Pause

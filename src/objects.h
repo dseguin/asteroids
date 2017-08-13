@@ -28,10 +28,25 @@
  *
  *****************************************************************************/
 
+/**
+ * \file objects.h
+ * \brief Variables that describe ingame objects
+ */
+
+/**
+ * \defgroup object Objects
+ * \brief Variables that describe ingame objects
+ */
+
 #ifndef OBJECTS_H
 #define OBJECTS_H
 
-/*all vertexes in one array*/
+/** \ingroup object
+ * \brief All vertexes in one array
+ *
+ * Each object is defined as a group of vertices,
+ * and each vertex is a (x,y) coordinate pair.
+ **/
 const float object_verts[] = {
     /*player*/
     0.f,0.04f,      0.04f,-0.04f, 0.f,-0.02f,   -0.04f,-0.04f,
@@ -50,7 +65,11 @@ const float object_verts[] = {
     0.f,-0.04f,     0.02f,-0.04f, 0.04f,-0.04f,  0.04f,-0.06f,
     0.f,-0.08f,     0.02f,-0.08f, 0.04f,-0.08f};
 
-/*all indices in one array*/
+/** \ingroup object
+ * \brief All indices in one array
+ *
+ * The indices describe the order in which vertices are drawn.
+ **/
 const unsigned char object_index[] = {
     0,1,2,3,                                     /*player*/
     4,5,                                         /*projectile*/
@@ -93,7 +112,14 @@ const unsigned char object_index[] = {
     28,33,30,33,37,                              /*Y*/
     28,30,36,38};                                /*Z*/
 
-/*reference asteroid bounding triangles*/
+/** \ingroup object
+ * \brief Reference asteroid bounding triangles
+ *
+ * A group of 6 triangles that form bounds of an asteroid.
+ * Triangles are grouped in order as <i>ABC</i>, <i>CDE</i>,
+ * <i>EFC</i>, <i>CFA</i>, <i>AFG</i>, <i>GAH</i> respectively,
+ * where A is the top-most vertex and B,C,D,... go around clockwise.
+ **/
 const float aster_bounds[6][6] = {
     {0.f,0.03f,     0.02f,0.02f,   0.03f,0.f},   /*ABC*/
     {0.03f,0.f,     0.03f,-0.03f,  0.01f,-0.04f},/*CDE*/
@@ -102,11 +128,18 @@ const float aster_bounds[6][6] = {
     {0.f,0.03f,     0.f,-0.03f,   -0.02f,-0.03f},/*AFG*/
     {-0.02f,-0.03f, 0.f,0.03f,    -0.03f,0.f}};  /*GAH*/
 
-/*reference player bounding triangle*/
+/** \ingroup object
+ * \brief Reference player bounding triangle
+ **/
 const float player_bounds[6] = {
-    0.f,0.04f,      0.04f,-0.04f, -0.04f,-0.04f};
+    0.f,0.04f,  0.04f,-0.04f, -0.04f,-0.04f};
 
-/*where objects are in object_verts[]*/
+/** \ingroup object
+ * \brief Where objects are in object_verts[]
+ *
+ * Byte offset to the first vertex in \c object_verts[] that
+ * describes an object.
+ **/
 const unsigned object_vertex_offsets[] = {
     0,                 /*player*/
     sizeof(float)*8,   /*projectile*/
@@ -114,7 +147,12 @@ const unsigned object_vertex_offsets[] = {
     sizeof(float)*28,  /*blast*/
     sizeof(float)*56}; /*alpha-numeric*/
 
-/*where indices are in object_index[]*/
+/** \ingroup object
+ * \brief Where indices are in object_index[]
+ *
+ * Byte offset to the first index in \c object_index[] that
+ * describes the vertex drawing order of an object.
+ **/
 const unsigned object_index_offsets[] = {
     0,                         /*player*/
     sizeof(unsigned char)*4,   /*projectile*/
@@ -157,7 +195,9 @@ const unsigned object_index_offsets[] = {
     sizeof(unsigned char)*205, /*Y*/
     sizeof(unsigned char)*210};/*Z*/
 
-/*(vertex,index)*/
+/** \ingroup object
+ * \brief Element count (vertex,index)
+ **/
 const unsigned char object_element_count[] = {
     8,4,  4,2,  16,8, 28,14,22,6,
     22,2, 22,6, 22,7, 22,5, 22,6,

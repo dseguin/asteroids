@@ -17,8 +17,8 @@ build:
 before_build: nuget restore VisualStudio/asteroids.sln
 
 after_build:
-    - if %PLATFORM%==x86 (cd VisualStudio\Release & del asteroids.iobj & del asteroids.ipdb & del asteroids.pdb & del asteroids.obj & del vc14?.pdb & rmdir /S /Q asteroids.tlog)
-    - if %PLATFORM%==x64 (cd VisualStudio\x64\Release & del asteroids.iobj & del asteroids.ipdb & del asteroids.pdb & del asteroids.obj & del vc14?.pdb & rmdir /S /Q asteroids.tlog)
+    - if %PLATFORM%==x86 (cd VisualStudio\Release & del asteroids.iobj & del asteroids.ipdb & del asteroids.pdb & del '*.obj' & del vc14?.pdb & rmdir /S /Q asteroids.tlog)
+    - if %PLATFORM%==x64 (cd VisualStudio\x64\Release & del asteroids.iobj & del asteroids.ipdb & del asteroids.pdb & del '*.obj' & del vc14?.pdb & rmdir /S /Q asteroids.tlog)
 
 artifacts:
     - path: VisualStudio\Release

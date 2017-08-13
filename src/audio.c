@@ -28,12 +28,17 @@
  *
  *****************************************************************************/
 
+/**
+ * \file audio.c
+ */
+
 #include <SDL_audio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <math.h>
 #include <string.h>
 #include "global.h"
+#include "shared.h"
 
 /*notes in distance from A4 (440Hz)*/
 const int tune_index[2][16] = {
@@ -48,35 +53,12 @@ const int tune_timing[2][16] = {
 /*number of elements in a tune*/
 const unsigned tune_count[2] = {6, 11};
 
-/*** SFX channel ***
+/** \ingroup audio
+ * \brief Get sample frequency
  *
- * An array of st_audio represents different audio channels
- * that get mixed together. Each st_audio contains
- * everything needed to synthesize a sound. If 'silence'
- * is true, only zeros get written to audio. Only the
- * 'volume' from the first st_audio is used to control
- * audio. All variables should be set before playing a sound.
- **/
-typedef struct st_audio {
-    bool        silence;
-    int         volume;   /*between 0 and 127*/
-    unsigned    i;        /*general incrementer*/
-    unsigned    note_nr;  /*increments the note in a tune*/
-    unsigned    sfx_nr;   /*ID of sound to play (see SFX* defines)*/
-    unsigned    attack;   /*ADSR length in samples*/
-    unsigned    decay;
-    unsigned    sustain;
-    unsigned    release;
-    unsigned    waveform; /*1 = square, 2 = saw, 3 = tri, * = sine*/
-    float       freq;     /*starting frequency*/
-    float       amp;      /*starting amplitude*/
-    float       env;      /*starting envelope (0 if attack is >0*/
-} st_audio;
-
-/* Get sample frequency.
- *
- *     d       - st_audio passed from audio_fill_buffer()
- *     channel - "mix channel" to use
+ * \param d       - st_audio passed from audio_fill_buffer()
+ * \param channel - "mix channel" to use
+ * \return Frequency of the current sample
  *
  * This is only called internally by audio_fill_buffer().
  * Contains sound effect "recipes" that return the frequency

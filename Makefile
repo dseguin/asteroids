@@ -6,6 +6,7 @@ CC ?= gcc
 SRCDIR := src
 BUILDDIR := build
 TARGETDIR := bin
+DOCDIR := docs
 TARGET := $(TARGETDIR)/asteroids
 
 SRCEXT := c
@@ -59,9 +60,13 @@ gnu89:
 	$(eval DEBUGFLAGS="-std=gnu89" "-D_GNU_SOURCE" $(DEBUGFLAGS))
 	$(eval RELEASEFLAGS="-std=gnu89" "-D_GNU_SOURCE" $(RELEASEFLAGS))
 
+doc: $(DOCDIR)/doxygen.conf
+	@echo " doxygen $<"
+		doxygen $<
+
 clean:
 	@echo " Cleaning..."; 
-	@echo " $(RM) -r $(BUILDDIR) $(TARGETDIR)" ; \
-		$(RM) -r $(BUILDDIR) $(TARGETDIR)
+	@echo " $(RM) -r $(BUILDDIR) $(TARGETDIR) $(DOCDIR)/html $(DOCDIR)/*.db" ; \
+		$(RM) -r $(BUILDDIR) $(TARGETDIR) $(DOCDIR)/html $(DOCDIR)/*.db
 
 .PHONY: all makedirs debug release clean tests

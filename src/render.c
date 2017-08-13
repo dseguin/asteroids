@@ -31,7 +31,12 @@
 #ifdef _WIN32
   #include <Windows.h>
 #endif
-#include <GL/gl.h>
+#ifdef __APPLE__
+  #include <Carbon/Carbon.h>
+  #include <OpenGL/gl.h>
+#else
+  #include <GL/gl.h>
+#endif
 #include <SDL.h>
 #include "global.h"
 #include "shared.h"

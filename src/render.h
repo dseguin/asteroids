@@ -28,19 +28,30 @@
  *
  *****************************************************************************/
 
+/**
+ * \file render.h
+ * \brief Functions that handle OpenGL drawing and transformation calls
+ */
+
+/**
+ * \defgroup render Drawing
+ * \brief Functions that handle OpenGL drawing and transformation calls
+ */
+
 #ifndef RENDER_H
 #define RENDER_H
 
 #include "shared.h"
 
-/* Draw elements.
+/** \ingroup render
+ * \brief Draw elements
  *
- *     draw - struct containing variables required for drawing
+ * \param draw - struct containing variables required for drawing
  *
  * Everything in st_shared should point to a defined variable in
  * the main scope.
  **/
-void draw_objects           (st_shared *draw);
+void draw_objects(st_shared *draw);
 
 #endif /*RENDER_H*/
 

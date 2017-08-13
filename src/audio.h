@@ -28,16 +28,27 @@
  *
  *****************************************************************************/
 
+/**
+ * \file audio.h
+ * \brief Functions for generating and mixing audio
+ */
+
+/**
+ * \defgroup audio Audio
+ * \brief Functions for generating and mixing audio
+ */
+
 #ifndef AUDIO_H
 #define AUDIO_H
 
 #include <stdint.h>
 
-/* Audio stream callback.
+/** \ingroup audio
+ * \brief Audio stream callback.
  *
- *     data - st_audio array assigned to an audio spec
- *     buffer - audio buffer to be filled
- *     len - size of buffer in bytes
+ * \param data - st_audio array assigned to an audio spec
+ * \param buffer - audio buffer to be filled
+ * \param len - size of buffer in bytes
  *
  * This is called automatically by SDL to fill
  * AUDIO_CALLBACK_BYTES worth of data to the audio buffer.
@@ -48,12 +59,13 @@
  * mixed through SDL_MixAudioFormat for volume control.
  *
  * To play a sound, find a free "mix channel"
- *
+ * \code{.c}
  *     for(i=0; i<AUDIO_MIX_CHANNELS; i++)
  *         if(st_audio[i].silence)
+ * \endcode
  *
  * then set the elements of st_audio[i] to the sound to play
- *
+ * \code{.c}
  *     st_audio[i].sfx_nr   = <sfx to play>
  *     st_audio[i].note_nr  = 0
  *     st_audio[i].i        = 0
@@ -66,10 +78,9 @@
  *     st_audio[i].sustain  = <sustain duration>
  *     st_audio[i].release  = <release duration>
  *     st_audio[i].silence  = false
- **/
-void audio_fill_buffer      (void    *data,
-                             uint8_t *buffer,
-                             int      len);
+ * \endcode
+ */
+void audio_fill_buffer(void *data, uint8_t *buffer, int len);
 
 #endif /*AUDIO_H*/
 

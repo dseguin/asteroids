@@ -28,19 +28,30 @@
  *
  *****************************************************************************/
 
+/**
+ * \file collision.h
+ * \brief Functions relating to updating physics and detecting collisions
+ */
+
+/**
+ * \defgroup collision Physics
+ * \brief Functions relating to updating physics and detecting collisions
+ */
+
 #ifndef COLLISION_H
 #define COLLISION_H
 
 #include "shared.h"
 
-/* Update physics.
+/** \ingroup collision
+ * \brief Update physics
  *
- *     phy - struct containing variables required for physics
+ * \param phy - struct containing variables required for physics
  *
  * Everything in st_shared should point to a defined variable in
  * the main scope.
  **/
-void update_physics         (st_shared *phy);
+void update_physics(st_shared *phy);
 
 #endif /*COLLISION_H*/
 

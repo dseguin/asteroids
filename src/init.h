@@ -28,22 +28,32 @@
  *
  *****************************************************************************/
 
+/**
+ * \file init.h
+ * \brief Initialization functions
+ */
+
+/**
+ * \defgroup init Init
+ * \brief Tasks performed before the main loop
+ */
+
 #ifndef INIT_H
 #define INIT_H
 
 #include "global.h"
 #include "shared.h"
 
-/* Initialize SDL functions.
+/** \ingroup init
+ * \brief Initialize SDL functions
  *
- *     init - struct containing variables required for init
+ * \param init - struct containing variables required for init
+ * \return \b true if operation succeeds, \b false if an error occurs.
  *
  * This is mostly boilerplate setup. Everything in st_shared should
  * point to a defined variable in the main scope.
- *
- * Returns true if operation succeeds, false if an error occurs.
  **/
-bool init_                  (st_shared *init);
+bool init_(st_shared *init);
 
 #endif /*INIT_H*/
 

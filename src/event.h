@@ -28,19 +28,30 @@
  *
  *****************************************************************************/
 
+/**
+ * \file event.h
+ * \brief Event handling and polling
+ */
+
+/**
+ * \defgroup event Events
+ * \brief Functions for event handling and polling
+ */
+
 #ifndef EVENT_H
 #define EVENT_H
 
 #include "shared.h"
 
-/* Poll for events.
+/** \ingroup event
+ * \brief Poll for events
  *
- *     ev - struct containing variables required for polling events
+ * \param ev - struct containing variables required for polling events
  *
  * Everything in st_shared should point to a defined variable in the
  * main scope.
  **/
-void poll_events            (st_shared *ev);
+void poll_events(st_shared *ev);
 
 #endif /*EVENT_H*/
 

@@ -28,6 +28,11 @@
  *
  *****************************************************************************/
 
+/**
+ * \file global.h
+ * \brief Global variables and defined macros
+ */
+
 #ifndef GLOBAL_H
 #define GLOBAL_H
 

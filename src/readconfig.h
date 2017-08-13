@@ -28,19 +28,33 @@
  *
  *****************************************************************************/
 
+/**
+ * \file readconfig.h
+ * \brief Functions for parsing and generating configuration options
+ */
+
+/**
+ * \defgroup config Config
+ * \brief Functions for parsing and generating configuration options
+ */
+
 #ifndef READCONFIG_H
 #define READCONFIG_H
 
 #include "global.h"
 
-/*** resolution options ***/
+/** \ingroup config
+ * \brief Resolution options
+ */
 typedef struct resolution{
     int         width;
     int         height;
     int         refresh;
 } resolution;
 
-/*** config options ***/
+/** \ingroup config
+ * \brief Config options
+ */
 typedef struct options {
     bool        physics_enabled;
     bool        audio_enabled;
@@ -60,34 +74,32 @@ typedef struct options {
     resolution  fullres;
 } options;
 
-/* Get configuration settings.
+/** \ingroup config
+ * \brief Get configuration settings
  *
- *     config - options struct to be returned
+ * \param config - options struct to be returned
+ * \return \b true if operation succeeds, \b false if an error occurs.
  *
  * If a configuration file exists, it will attempt to read it
  * and update any options in the config struct. If no configuration
  * file can be found, it will attempt to create one using options
  * in the config struct.
- *
- * Returns true if operation succeeds, false if an error occurs.
- **/
-bool get_config_options     (options *config);
+ */
+bool get_config_options(options *config);
 
-/* Parse command line arguments.
+/** \ingroup config
+ * \brief Parse command line arguments
  *
- *     argc   - number of arguments
- *     argv   - list of arguments
- *     config - options to be changed
+ * \param argc   - number of arguments
+ * \param argv   - list of arguments
+ * \param config - options to be changed
+ * \return \b true if operation succeeds, \b false if an error occurs.
  *
  * Valid command line options will affect any relevant config items
  * that last for the duration of program execution. Command line
  * options are separate from config file options, and these will
  * overide any config file options.
- *
- * Returns true if operation succeeds, false if an error occurs.
- **/
-bool parse_cmd_args         (const int   argc,
-                             char      **argv,
-                             options    *config);
+ */
+bool parse_cmd_args(const int argc, char **argv, options *config);
 
 #endif /*READCONFIG_H*/
