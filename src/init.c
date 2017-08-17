@@ -31,7 +31,12 @@
 #ifdef _WIN32
   #include <Windows.h>
 #endif
-#include <GL/gl.h>
+#ifdef __APPLE__
+  #include <Carbon/Carbon.h>
+  #include <OpenGL/gl.h>
+#else
+  #include <GL/gl.h>
+#endif
 #include <SDL.h>
 #ifdef _WIN32
   #include <SDL_opengl_glext.h>
@@ -40,6 +45,7 @@
 #include <stdio.h>
 #include <time.h>
 #include "global.h"
+#define MAIN_FILE_
 #include "objects.h"
 #include "shared.h"
 #include "audio.h"

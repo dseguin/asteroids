@@ -31,14 +31,16 @@
 #ifdef _WIN32
   #include <Windows.h>
 #endif
-#include <GL/gl.h>
+#ifdef __APPLE__
+  #include <Carbon/Carbon.h>
+  #include <OpenGL/gl.h>
+#else
+  #include <GL/gl.h>
+#endif
 #include <SDL.h>
+#include "objects.h"
 #include "global.h"
 #include "shared.h"
-
-extern const unsigned char object_element_count[];
-extern const unsigned char object_index[];
-extern const unsigned object_index_offsets[];
 
 void draw_objects(st_shared *draw)
 {

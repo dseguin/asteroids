@@ -31,6 +31,30 @@
 #ifndef OBJECTS_H
 #define OBJECTS_H
 
+#ifndef MAIN_FILE_
+/*all vertexes in one array*/
+extern const float object_verts[];
+
+/*all indices in one array*/
+extern const unsigned char object_index[];
+
+/*reference asteroid bounding triangles*/
+extern const float aster_bounds[6][6];
+
+/*reference player bounding triangle*/
+extern const float player_bounds[6];
+
+/*where objects are in object_verts[]*/
+extern const unsigned object_vertex_offsets[];
+
+/*where indices are in object_index[]*/
+extern const unsigned object_index_offsets[];
+
+/*(vertex,index)*/
+extern const unsigned char object_element_count[];
+
+#else /*definitions*/
+
 /*all vertexes in one array*/
 const float object_verts[] = {
     /*player*/
@@ -167,6 +191,6 @@ const unsigned char object_element_count[] = {
     22,3, 22,5, 22,4, 22,5, 22,5,
     22,6, 22,6, 22,6, 22,4, 22,4,
     22,3, 22,5, 22,5, 22,5, 22,4};
-
+#endif /*MAIN_FILE_*/
 #endif /*OBJECTS_H*/
 
