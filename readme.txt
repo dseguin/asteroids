@@ -8,7 +8,8 @@ Simple Asteroids
 
 Simple 'Asteroids' clone written in C using SDL2 and OpenGL 1.1
 
-Controls:
+Default controls
+----------------
     p            - Pause
     backtick (`) - FPS indicator
     brackets []  - Adjust volume
@@ -22,7 +23,7 @@ Controls:
     arrow keys   - Move around (player 2)
     right ctrl   - Shoot (player 2)
 
-Run the program with '-h' for command line options.
+Key bindings can be changed in the configuration file.
 
 
 Configuration
@@ -31,6 +32,8 @@ The "asteroids.conf" configuration file sits in the same directory
 as the executable. If no such file exists, it will be generated
 using default options. Descriptions of each option can be found in
 the generated config file.
+
+Run the program with '-h' for command line options.
 
 
 Dependencies

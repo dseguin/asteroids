@@ -34,11 +34,30 @@
 #include "global.h"
 
 /*** resolution options ***/
-typedef struct resolution{
+typedef struct resolution {
     int         width;
     int         height;
     int         refresh;
 } resolution;
+
+typedef struct st_keybind {
+    unsigned p1_forward;
+    unsigned p1_backward;
+    unsigned p1_left;
+    unsigned p1_right;
+    unsigned p1_shoot;
+    unsigned p1_altshoot;
+    unsigned p2_forward;
+    unsigned p2_backward;
+    unsigned p2_left;
+    unsigned p2_right;
+    unsigned p2_shoot;
+    unsigned pause;
+    unsigned debug;
+    unsigned vol_up;
+    unsigned vol_down;
+    unsigned quit;
+} st_keybind;
 
 /*** config options ***/
 typedef struct options {
@@ -58,6 +77,7 @@ typedef struct options {
     int         fullscreen;
     resolution  winres;
     resolution  fullres;
+    st_keybind  keybind;
 } options;
 
 /* Get configuration settings.
