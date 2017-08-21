@@ -46,87 +46,114 @@ void poll_events(st_shared *ev)
                 *ev->loop_exit     = true;
         else if(event_main.type == SDL_KEYDOWN)
         {
-            if(event_main.key.keysym.scancode == SDL_SCANCODE_ESCAPE)
+            if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.quit)
                 *ev->loop_exit     = true;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_P)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.pause)
             {
                 if(*ev->paused)
                    *ev->paused     = false;
                 else
                    *ev->paused     = true;
             }
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_GRAVE)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.debug)
             {
                 if(*ev->show_fps)
                    *ev->show_fps   = false;
                 else
                    *ev->show_fps   = true;
             }
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_LEFTBRACKET)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.vol_down)
             {
                 (ev->sfx_main)[0].volume -= 5;
                 if((ev->sfx_main)[0].volume < 0)
-                    (ev->sfx_main)[0].volume = 0;
+                   (ev->sfx_main)[0].volume = 0;
             }
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_RIGHTBRACKET)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.vol_up)
             {
                 (ev->sfx_main)[0].volume += 5;
                 if((ev->sfx_main)[0].volume > 127)
-                    (ev->sfx_main)[0].volume = 127;
+                   (ev->sfx_main)[0].volume = 127;
             }
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_forward)
                 (*ev->plyr)[0].key_forward  = true;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_S)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_backward)
                 (*ev->plyr)[0].key_backward = true;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_A)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_left)
                 (*ev->plyr)[0].key_left     = true;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_D)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_right)
                 (*ev->plyr)[0].key_right    = true;
             else if(ev->config->player_count == 1 &&
-                    event_main.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                    event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_altshoot)
                 (*ev->plyr)[0].key_shoot    = true;
             else if(ev->config->player_count > 1)
             {
-                if(event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
+                if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p1_shoot)
                     (*ev->plyr)[0].key_shoot    = true;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_UP)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_forward)
                     (*ev->plyr)[1].key_forward  = true;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_DOWN)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_backward)
                     (*ev->plyr)[1].key_backward = true;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_LEFT)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_left)
                     (*ev->plyr)[1].key_left     = true;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_RIGHT)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_right)
                     (*ev->plyr)[1].key_right    = true;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_RCTRL)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_shoot)
                     (*ev->plyr)[1].key_shoot    = true;
             }
         }
         else if(event_main.type == SDL_KEYUP)
         {
-            if(event_main.key.keysym.scancode == SDL_SCANCODE_W)
+            if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_forward)
                 (*ev->plyr)[0].key_forward  = false;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_S)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_backward)
                 (*ev->plyr)[0].key_backward = false;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_A)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_left)
                 (*ev->plyr)[0].key_left     = false;
-            else if(event_main.key.keysym.scancode == SDL_SCANCODE_D)
+            else if(event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_right)
                 (*ev->plyr)[0].key_right    = false;
             else if(ev->config->player_count == 1 &&
-                    event_main.key.keysym.scancode == SDL_SCANCODE_SPACE)
+                    event_main.key.keysym.scancode ==
+                    ev->config->keybind.p1_altshoot)
                 (*ev->plyr)[0].key_shoot    = false;
             else if(ev->config->player_count > 1)
             {
-                if(event_main.key.keysym.scancode == SDL_SCANCODE_TAB)
+                if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p1_shoot)
                     (*ev->plyr)[0].key_shoot    = false;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_UP)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_forward)
                     (*ev->plyr)[1].key_forward  = false;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_DOWN)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_backward)
                     (*ev->plyr)[1].key_backward = false;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_LEFT)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_left)
                     (*ev->plyr)[1].key_left     = false;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_RIGHT)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_right)
                     (*ev->plyr)[1].key_right    = false;
-                else if(event_main.key.keysym.scancode == SDL_SCANCODE_RCTRL)
+                else if(event_main.key.keysym.scancode ==
+                        ev->config->keybind.p2_shoot)
                     (*ev->plyr)[1].key_shoot    = false;
             }
         }

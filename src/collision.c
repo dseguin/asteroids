@@ -34,13 +34,9 @@
 
 #include <SDL.h>
 #include <math.h>
+#include "objects.h"
 #include "global.h"
 #include "shared.h"
-
-extern const float player_bounds[];
-extern const float aster_bounds[][6];
-extern const float object_verts[];
-extern const unsigned char object_element_count[];
 
 /** \ingroup collision
  * \brief Detect if a point is in a triangle

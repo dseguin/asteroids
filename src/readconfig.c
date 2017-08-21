@@ -48,6 +48,7 @@
   #define CONFIG_FS_DELIMIT '/'
 #endif
 
+#include <SDL_keyboard.h>
 #include <SDL_version.h>
 #include <SDL_revision.h>
 #include <stdio.h>
@@ -274,6 +275,41 @@ bool get_config_options(options *config)
         fprintf(config_file, "# friendly-fire - Enables players to damage each other\n");
         fprintf(config_file, "players = 1\n");
         fprintf(config_file, "friendly-fire = on\n\n");
+        fprintf(config_file, "### Key bindings\n");
+        fprintf(config_file, "# Key values are expected to be enclosed in quotemarks. A full list of\n");
+        fprintf(config_file, "# supported key names can be found here: http://wiki.libsdl.org/SDL_Scancode\n");
+        fprintf(config_file, "# key-p1-forward  - Moves player 1 forward. The default is \"W\".\n");
+        fprintf(config_file, "# key-p1-backward - Moves player 1 backward. The default is \"S\".\n");
+        fprintf(config_file, "# key-p1-left     - Turns player 1 left. The default is \"A\".\n");
+        fprintf(config_file, "# key-p1-right    - Turns player 1 right. The default is \"D\".\n");
+        fprintf(config_file, "# key-p1-shoot    - Player 1 shoot key. The default is \"Tab\".\n");
+        fprintf(config_file, "# key-p1-altshoot - Shoot key for when the number of players is set to 1. The default is \"Space\".\n");
+        fprintf(config_file, "# key-p2-forward  - Moves player 2 forward. The default is \"Up\".\n");
+        fprintf(config_file, "# key-p2-backward - Moves player 2 backward. The default is \"Down\".\n");
+        fprintf(config_file, "# key-p2-left     - Turns player 2 left. The default is \"Left\".\n");
+        fprintf(config_file, "# key-p2-right    - Turns player 2 right. The default is \"Right\".\n");
+        fprintf(config_file, "# key-p2-shoot    - Player 2 shoot key. The default is \"Right Ctrl\".\n");
+        fprintf(config_file, "# key-pause       - Pauses the game. The default is \"P\".\n");
+        fprintf(config_file, "# key-debug       - Toggles misc info (fps, etc.). The default is \"`\".\n");
+        fprintf(config_file, "# key-volume-up   - Increases game volume. The default is \"]\".\n");
+        fprintf(config_file, "# key-volume-down - Decreases game volume. The default is \"[\".\n");
+        fprintf(config_file, "# key-quit        - Closes application. The default is \"Escape\".\n");
+        fprintf(config_file, "key-p1-forward = \"W\"\n");
+        fprintf(config_file, "key-p1-backward = \"S\"\n");
+        fprintf(config_file, "key-p1-left = \"A\"\n");
+        fprintf(config_file, "key-p1-right = \"D\"\n");
+        fprintf(config_file, "key-p1-shoot = \"Tab\"\n");
+        fprintf(config_file, "key-p1-altshoot = \"Space\"\n");
+        fprintf(config_file, "key-p2-forward = \"Up\"\n");
+        fprintf(config_file, "key-p2-backward = \"Down\"\n");
+        fprintf(config_file, "key-p2-left = \"Left\"\n");
+        fprintf(config_file, "key-p2-right = \"Right\"\n");
+        fprintf(config_file, "key-p2-shoot = \"Right Ctrl\"\n");
+        fprintf(config_file, "key-pause = \"P\"\n");
+        fprintf(config_file, "key-debug = \"`\"\n");
+        fprintf(config_file, "key-volume-up = \"]\"\n");
+        fprintf(config_file, "key-volume-down = \"[\"\n");
+        fprintf(config_file, "key-quit = \"Escape\"\n\n");
         fprintf(config_file, "### Asteroid properties\n");
         fprintf(config_file, "# physics     - Enables asteroid collision physics. Can be 'on' or 'off'. The default is 'on'.\n");
         fprintf(config_file, "# init-count  - Number of asteroids that spawn initially. Can be between 0 and 16. The default is 3.\n");
@@ -550,6 +586,138 @@ bool get_config_options(options *config)
                     config->audio_volume = i;
                 else
                     fprintf(stderr, "Warning: In config file, 'volume' must be an integer between 0 and 127.\n");
+            }
+        }
+        else if(config_token[0] == 'k' && config_token[1] == 'e' &&
+                config_token[2] == 'y' && config_token[3] == '-')  /*key bind*/
+        {
+            char tmp_str[32] = {'\0'};
+            bool found_quot = false;
+            unsigned j;
+            /*get second token*/
+            config_token2 = strtok(NULL, "");
+            /*get value in quotemarks*/
+            for(i = 0, j = 0; i < (signed)strlen(config_token2) && j < 31; i++)
+            {
+                if(config_token2[i] == '"')
+                {
+                    if(found_quot)
+                        break;
+                    else
+                    {
+                        found_quot = true;
+                        continue;
+                    }
+                }
+                if(found_quot)
+                {
+                    tmp_str[j] = config_token2[i];
+                    j++;
+                }
+            }
+            found_quot = false;
+            if(tmp_str[0] == '\0')
+                fprintf(stderr, "Warning: In config file, value for '%s' is missing or not enclosed in quotemarks.\n", config_token);
+            else
+            {
+                if(!strcmp(config_token, "key-p1-forward"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p1_forward = j;
+                }
+                else if(!strcmp(config_token, "key-p1-backward"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p1_backward = j;
+                }
+                else if(!strcmp(config_token, "key-p1-left"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p1_left = j;
+                }
+                else if(!strcmp(config_token, "key-p1-right"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p1_right = j;
+                }
+                else if(!strcmp(config_token, "key-p1-shoot"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p1_shoot = j;
+                }
+                else if(!strcmp(config_token, "key-p1-altshoot"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p1_altshoot = j;
+                }
+                else if(!strcmp(config_token, "key-p2-forward"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p2_forward = j;
+                }
+                else if(!strcmp(config_token, "key-p2-backward"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p2_backward = j;
+                }
+                else if(!strcmp(config_token, "key-p2-left"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p2_left = j;
+                }
+                else if(!strcmp(config_token, "key-p2-right"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p2_right = j;
+                }
+                else if(!strcmp(config_token, "key-p2-shoot"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.p2_shoot = j;
+                }
+                else if(!strcmp(config_token, "key-pause"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.pause = j;
+                }
+                else if(!strcmp(config_token, "key-debug"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.debug = j;
+                }
+                else if(!strcmp(config_token, "key-volume-up"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.vol_up = j;
+                }
+                else if(!strcmp(config_token, "key-volume-down"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.vol_down = j;
+                }
+                else if(!strcmp(config_token, "key-quit"))
+                {
+                    j = SDL_GetScancodeFromName(tmp_str);
+                    if(j == SDL_SCANCODE_UNKNOWN) found_quot = true;
+                    else config->keybind.quit = j;
+                }
+                if(found_quot)
+                    fprintf(stderr, "Warning: In config file, '%s' must have a valid key name from http://wiki.libsdl.org/SDL_Scancode\n", config_token);
             }
         }
     }

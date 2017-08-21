@@ -45,6 +45,7 @@
 #include <stdio.h>
 #include <time.h>
 #include "global.h"
+#define MAIN_FILE_
 #include "objects.h"
 #include "shared.h"
 #include "audio.h"

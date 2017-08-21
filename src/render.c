@@ -38,12 +38,9 @@
   #include <GL/gl.h>
 #endif
 #include <SDL.h>
+#include "objects.h"
 #include "global.h"
 #include "shared.h"
-
-extern const unsigned char object_element_count[];
-extern const unsigned char object_index[];
-extern const unsigned object_index_offsets[];
 
 void draw_objects(st_shared *draw)
 {

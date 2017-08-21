@@ -1,3 +1,8 @@
+2017-08-20 - Version 1.5.2 ***
+
+* Made keys rebindable in the config file
+* Minor fixes to source layout
+
 2017-08-07 - Version 1.5.1 ***
 
 * Use legacy context for systems that only support OpenGL 1.1

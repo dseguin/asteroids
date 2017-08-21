@@ -71,7 +71,13 @@ int main                    (int    argc,
     asteroid       *aster;
     options         config           = { /*default config options.*/
         true, true, true, 96, 1, 1, 8, 3, 5, 1.f,
-        1.f, 1.f, 1.f, 0, {800,600,60}, {0,0,0}};
+        1.f, 1.f, 1.f, 0, {800,600,60}, {0,0,0},
+        {SDL_SCANCODE_W, SDL_SCANCODE_S, SDL_SCANCODE_A, SDL_SCANCODE_D,
+        SDL_SCANCODE_TAB, SDL_SCANCODE_SPACE, SDL_SCANCODE_UP,
+        SDL_SCANCODE_DOWN, SDL_SCANCODE_LEFT, SDL_SCANCODE_RIGHT,
+        SDL_SCANCODE_RCTRL, SDL_SCANCODE_P, SDL_SCANCODE_GRAVE,
+        SDL_SCANCODE_RIGHTBRACKET, SDL_SCANCODE_LEFTBRACKET,
+        SDL_SCANCODE_ESCAPE}};
     /*make pointers to shared vars*/
     shared_vars.aster                = &aster;
     shared_vars.audio_device         = 0;
