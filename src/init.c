@@ -88,6 +88,7 @@ void print_sdl_version(void)
 bool init_(st_shared *init)
 {
     int i,j,k;
+    int             display = 0;
     unsigned        object_buffers[] = {0,0};
     const float     rad_mod = M_PI/180.f;
     SDL_DisplayMode mode_current;
@@ -154,7 +155,7 @@ bool init_(st_shared *init)
 
     if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_AUDIO))
     {
-        fprintf(stderr, "SDL Init: %s\n", SDL_GetError());
+        fprintf(stderr, "SDL_Init: %s\n", SDL_GetError());
         return false;
     }
     /*audio init*/
@@ -171,7 +172,8 @@ bool init_(st_shared *init)
                                                  &spec_current, 0);
         if(!init->audio_device)
         {
-            fprintf(stderr, "SDL Open Audio: Failed to open audio device.\n");
+            fprintf(stderr,
+                    "SDL_OpenAudioDevice: Failed to open audio device.\n");
             init->config->audio_enabled = false;
         }
         else if(spec_current.format != spec_target.format)
@@ -196,7 +198,25 @@ bool init_(st_shared *init)
     }
     if(init->config->audio_enabled)
         SDL_PauseAudioDevice(init->audio_device, 0);
+    /*create window*/
+    if(!(*init->win_main = SDL_CreateWindow("Simple Asteroids",
+                                     SDL_WINDOWPOS_UNDEFINED,
+                                     SDL_WINDOWPOS_UNDEFINED,
+                                     mode_default.w,
+                                     mode_default.h,
+                                     SDL_WINDOW_OPENGL)))
+    {
+        fprintf(stderr, "SDL_CreateWindow: %s\n", SDL_GetError());
+        return false;
+    }
     /*find closest mode*/
+    display = SDL_GetWindowDisplayIndex(*init->win_main);
+    if(display < 0)
+    {
+        fprintf(stderr, "SDL_GetWindowDisplayIndex: %s\n", SDL_GetError());
+        SDL_ClearError();
+        display = 0;
+    }
     if(init->config->fullscreen)
     {
         if(init->config->fullres.width && init->config->fullres.height)
@@ -207,15 +227,16 @@ bool init_(st_shared *init)
         }
         else /*use desktop video mode*/
         {
-            if(SDL_GetDesktopDisplayMode(0, &mode_target))
+            if(SDL_GetDesktopDisplayMode(display, &mode_target))
             {
-                fprintf(stderr, "SDL Get Desktop Mode: %s\n", SDL_GetError());
+                fprintf(stderr, "SDL_GetDesktopDisplayMode: %s\n",
+                        SDL_GetError());
                 SDL_ClearError();
             }
         }
-        if(!(SDL_GetClosestDisplayMode(0, &mode_target, &mode_current)))
+        if(!(SDL_GetClosestDisplayMode(display, &mode_target, &mode_current)))
         {
-            fprintf(stderr, "SDL Get Display Mode: %s\n", SDL_GetError());
+            fprintf(stderr, "SDL_GetClosestDisplayMode: %s\n", SDL_GetError());
             SDL_ClearError();
             mode_current = mode_default;
         }
@@ -229,29 +250,17 @@ bool init_(st_shared *init)
         mode_current.h            = init->config->winres.height;
         mode_current.refresh_rate = init->config->winres.refresh;
     }
-
-    /*create window*/
-    if(!(*init->win_main = SDL_CreateWindow("Simple Asteroids",
-                                     SDL_WINDOWPOS_UNDEFINED,
-                                     SDL_WINDOWPOS_UNDEFINED,
-                                     mode_default.w,
-                                     mode_default.h,
-                                     SDL_WINDOW_OPENGL)))
-    {
-        fprintf(stderr, "SDL Create Window: %s\n", SDL_GetError());
-        return false;
-    }
     /*set resolution*/
     if(init->config->fullscreen == 1)
     {
         if(SDL_SetWindowDisplayMode(*init->win_main, &mode_current))
         {
-            fprintf(stderr, "SDL Set Display Mode: %s\n", SDL_GetError());
+            fprintf(stderr, "SDL_SetWindowDisplayMode: %s\n", SDL_GetError());
             SDL_ClearError();
         }
         if(SDL_SetWindowFullscreen(*init->win_main, SDL_WINDOW_FULLSCREEN))
         {
-            fprintf(stderr, "SDL Set Fullscreen: %s\n", SDL_GetError());
+            fprintf(stderr, "SDL_SetWindowFullscreen: %s\n", SDL_GetError());
             return false;
         }
     }
@@ -260,7 +269,7 @@ bool init_(st_shared *init)
         if(SDL_SetWindowFullscreen(*init->win_main,
                     SDL_WINDOW_FULLSCREEN_DESKTOP))
         {
-            fprintf(stderr, "SDL Set Fullscreen: %s\n", SDL_GetError());
+            fprintf(stderr, "SDL_SetWindowFullscreen: %s\n", SDL_GetError());
             SDL_ClearError();
             SDL_SetWindowSize(*init->win_main, mode_current.w, mode_current.h);
         }
@@ -270,7 +279,7 @@ bool init_(st_shared *init)
     /*create GL context*/
     if(!(*init->win_main_gl = SDL_GL_CreateContext(*init->win_main)))
     {
-        fprintf(stderr, "SDL GLContext: %s\n", SDL_GetError());
+        fprintf(stderr, "SDL_GL_CreateContext: %s\n", SDL_GetError());
         return false;
     }
     /*set late swap tearing, or VSync if not*/
@@ -279,26 +288,27 @@ bool init_(st_shared *init)
         if(init->config->vsync == -1)
         {
             fprintf(stderr,
-  "SDL Set Swap Interval: %s\nLate swap tearing not supported. Using VSync.\n",
+ "SDL_GL_SetSwapInterval: %s\nLate swap tearing not supported. Using VSync.\n",
                     SDL_GetError());
             SDL_ClearError();
             if(SDL_GL_SetSwapInterval(1))
             {
-                fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.\n",
+                fprintf(stderr,
+                        "SDL_GL_SetSwapInterval: %s\nVSync disabled.\n",
                         SDL_GetError());
                 SDL_ClearError();
             }
         }
         else if(init->config->vsync == 1)
         {
-            fprintf(stderr, "SDL Set VSync: %s\nVSync disabled.\n",
+            fprintf(stderr, "SDL_GL_SetSwapInterval: %s\nVSync disabled.\n",
                     SDL_GetError());
             SDL_ClearError();
         }
         else
         {
             fprintf(stderr,
-                    "SDL Set Swap Interval: %s\nUnknown vsync option '%d'\n",
+                    "SDL_GL_SetSwapInterval: %s\nUnknown vsync option '%d'\n",
                     SDL_GetError(), init->config->vsync);
             SDL_ClearError();
         }

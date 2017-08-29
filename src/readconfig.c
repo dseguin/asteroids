@@ -48,6 +48,7 @@
   #define CONFIG_FS_DELIMIT '/'
 #endif
 
+#include <SDL_filesystem.h>
 #include <SDL_keyboard.h>
 #include <SDL_version.h>
 #include <SDL_revision.h>
@@ -118,110 +119,27 @@ bool get_config_options(options *config)
 {
     int        i = 0;
     float      f = 0.f;
+    unsigned   bin_path_len = 0;
     const char config_name[] = "asteroids.conf";
-    char       bin_path[FILENAME_MAX];
+    char      *bin_path;
     char       config_line[CONF_LINE_MAX]; /*full line from config file*/
     char      *config_token;  /*space delimited token from line*/
     char      *config_token2; /*token of a token*/
     char      *nl;            /*points to newline char in config_line*/
     FILE      *config_file;
 
-    #ifdef _WIN32
-
-    char     bin_path_tmp[FILENAME_MAX];
-    unsigned bin_path_len = 0;
-    /*get path to executable*/
-    /*to reduce code separation, this assumes that TCHAR == char*/
-    bin_path_len = GetModuleFileName(NULL, bin_path, sizeof(bin_path));
-    if(bin_path_len == sizeof(bin_path))
+    bin_path = SDL_GetBasePath();
+    if(!bin_path)
     {
-        fprintf(stderr, "GetModuleFileName error: Path size exceeded %d\n",
-                FILENAME_MAX);
-        return false;
-    }
-
-    #elif defined __APPLE__
-
-    unsigned bin_path_len = sizeof(bin_path);
-    char    *tmp_path = malloc(bin_path_len);
-    /*get path to executable*/
-    /*if FILNAME_MAX is insuficient, try again with proper buffer size*/
-    if(_NSGetExecutablePath(tmp_path, &bin_path_len))
-    {
-        fprintf(stderr, "_NSGetExecutablePath error: Path size exceeded %d. Attempting to retrieve full path.\n",
-                FILENAME_MAX);
-        tmp_path = realloc(bin_path_len);
-        if(_NSGetExecutablePath(tmp_path, &bin_path_len))
-        {
-            fprintf(stderr,
-          "_NSGetExecutablePath error: Failed to retrieve executable path.\n");
-            free(tmp_path);
-            return false;
-        }
-        fprintf(stderr,
-                "_NSGetExecutablePath: Successfully retrieved path '%s'\n",
-                tmp_path);
-    }
-    /*Resolve path that may contain symlinks, '.', or '..'*/
-    if(realpath(tmp_path, bin_path) == NULL)
-    {
-        fprintf(stderr,
-        "realpath error: Could not resolve filename '%s'. Instead got '%s'.\n",
-                tmp_path, bin_path);
-        free(tmp_path);
-        return false;
-    }
-    free(tmp_path);
-    bin_path_len = strlen(bin_path);
-
-    #elif defined __FreeBSD__
-
-    /*build up Information Base*/
-    int mib[4];
-    mib[0] = CTL_KERN;
-    mib[1] = KERN_PROC;
-    mib[2] = KERN_PROC_PATHNAME;
-    mib[3] = -1; /*current process*/
-    size_t bin_path_len = sizeof(bin_path);
-    if(sysctl(mib, 4, bin_path, &bin_path_len, NULL, 0))
-    {
-        perror("sysctl error");
+        fprintf(stderr, "SDL_GetBasePath: %s\n", SDL_GetError());
+        SDL_ClearError();
         return false;
     }
     bin_path_len = strlen(bin_path);
 
-    #else /*linux*/
-
-    ssize_t bin_path_len = 0;
-    /*get path to executable*/
-    /* /proc/self/exe is only relevant on linux*/
-    bin_path_len = readlink("/proc/self/exe", bin_path, sizeof(bin_path));
-    if(bin_path_len == -1)
-    {
-        perror("readlink error");
-        return false;
-    }
-
-    #endif
-
-    /*strip exe name from path*/
-    for(i = bin_path_len - 1; i >= 0; i--)
-    {
-        if(bin_path[i] == CONFIG_FS_DELIMIT)
-        {
-           bin_path[i+1] = '\0';
-           bin_path_len = i+1;
-           break;
-        }
-        else
-           bin_path[i] = '\0';
-        if(i == 0) /*no '/' or '\\' character*/
-        {
-           fprintf(stderr, "Error parsing executable path: No directories\n");
-           return false;
-        }
-    }
     #ifdef _WIN32
+    char *bin_path_tmp;
+    bin_path_tmp = malloc(bin_path_len + 16);
     /*redirect stderr/stdout to file*/
     if(bin_path_len + 11 < FILENAME_MAX)
     {
@@ -232,13 +150,10 @@ bool get_config_options(options *config)
         strcat(bin_path_tmp, "stderr.txt");
         freopen(bin_path_tmp, "w", stderr);
     }
+    free(bin_path_tmp);
     #endif
     /*Append config filename to bin_path*/
-    if(bin_path_len + sizeof(config_name) >= FILENAME_MAX)
-    {
-        fprintf(stderr, "Error parsing executable path: Path too long\n");
-        return false;
-    }
+    bin_path = realloc(bin_path, bin_path_len + strlen(config_name) + 8);
     strcat(bin_path, config_name);
 
     config_file = fopen(bin_path, "r");
@@ -331,6 +246,7 @@ bool get_config_options(options *config)
         fprintf(stderr, "Successfully generated config file 'asteroids.conf'. See comments in file for details.\n");
         return true;
     }
+    free(bin_path);
     /*read existing config*/
     while(!feof(config_file))
     {
