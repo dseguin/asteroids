@@ -38,6 +38,7 @@
   #include <GL/gl.h>
 #endif
 #include <SDL.h>
+#include <stdio.h>
 #include "objects.h"
 #include "global.h"
 #include "shared.h"

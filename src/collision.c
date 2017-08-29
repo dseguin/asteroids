@@ -30,6 +30,8 @@
 
 #include <SDL.h>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include "objects.h"
 #include "global.h"
 #include "shared.h"
